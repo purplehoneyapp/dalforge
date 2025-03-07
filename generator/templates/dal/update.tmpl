@@ -1,0 +1,65 @@
+{{define "update"}}
+{{- $column := index .Root.Columns .ColumnName }}
+
+func (d *{{.Root.Name | pascalCase}}DAL) Update(ctx context.Context, entity *{{.Root.Name | pascalCase}}) error {
+	const operation = "update"
+	start := time.Now()
+	dalOperationsTotal.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+
+	old, _ := d.GetByID(ctx, entity.ID) // Fetch old data before update
+
+	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return nil, d.update(ctx, entity)
+	})
+
+	if err != nil {
+		dbRequestsErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+		return err
+	}
+
+	dbRequestsLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(start).Seconds())
+
+	if err == nil {
+        d.InvalidateCache(ctx, entity)
+
+        // Invalidate cached lists for old and new
+		{{- range .Root.Operations.Lists }}
+			{{- if eq . "id"}}
+			{{- else}}
+		if old != nil && old.Age != entity.{{. | pascalCase}} {
+			d.invalidateListBy{{. | pascalCase}}(ctx, old.{{. | pascalCase}})
+		}
+			{{- end}}
+		{{- end}}
+    }
+
+	return nil
+}
+
+func (d *{{.Root.Name | pascalCase}}DAL) update(ctx context.Context, {{.Root.Name | camelCase}} *{{.Root.Name | pascalCase}}) error {
+	query := `
+		UPDATE {{.Root.Name | snakeCase}}s
+		SET {{template "comma_separated_update" .}}
+		WHERE id = ?
+	`
+	_, err := d.db.ExecContext(ctx, query,
+    {{- range $colName, $col := .Root.Columns}}
+        {{$.Root.Name | camelCase}}.{{$colName | pascalCase}},
+    {{- end}}{{$.Root.Name | camelCase}}.ID)
+
+	if err != nil {
+		return fmt.Errorf("failed to update {{.Root.Name | pascalCase}}: %w", err)
+	}
+	return nil
+}
+{{end}}
+
+{{define "comma_separated_update"}}
+	{{- $total := len .Root.Columns -}}
+	{{- $index := 0 -}}
+	{{- range $colName, $col := .Root.Columns -}}
+		{{$colName | snakeCase}} = ?
+		{{- $index = add $index 1 -}}
+		{{- if lt $index $total }}, {{end}}
+	{{- end}}
+{{end}}

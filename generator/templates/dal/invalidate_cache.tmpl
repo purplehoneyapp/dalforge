@@ -1,0 +1,68 @@
+{{define "invalidate_cache"}}
+func (d *{{.Name | pascalCase}}DAL) InvalidateCache(ctx context.Context, entity *{{.Name | pascalCase}}) {
+    {{- if and .Operations .Operations.Gets}}
+    d.cache.Del(ctx, fmt.Sprintf("{{$.Name | pascalCase}}_id_v1:%d", entity.ID))
+    {{- range .Operations.Gets}}
+    d.cache.Del(ctx, fmt.Sprintf("{{$.Name | pascalCase}}_{{.}}_v1:%d", entity.{{. | pascalCase}}))
+    {{- end}}
+    {{- end}}
+
+    {{- range .Operations.Lists }}
+            {{- if eq . "id"}}
+    d.invalidateListByID(ctx, entity.ID)
+            {{- else }}
+    d.invalidateListBy{{. | pascalCase}}(ctx, entity.{{. | pascalCase}})
+            {{- end}}
+    {{- end}}
+    dalCacheDeletes.WithLabelValues("{{.Name | snakeCase}}").Inc()
+}
+
+func (d *{{$.Name | pascalCase}}DAL) invalidateListByID(ctx context.Context, id int64) {
+    pattern := fmt.Sprintf("{{$.Name | snakeCase}}_list_{{$.Version}}:id:*", id)
+
+    var cursor uint64
+    for {
+        var keys []string
+        var err error
+        keys, cursor, err = d.cache.Scan(ctx, cursor, pattern, 1000).Result()
+        if err != nil {
+            // handle error
+            break
+        }
+        if len(keys) > 0 {
+            d.cache.Del(ctx, keys...)
+        }
+        if cursor == 0 {
+            break
+        }
+    }
+}
+
+{{- range .Operations.Lists }}
+{{- $column := index $.Columns . }}
+    {{- if eq . "id"}}
+    {{- else}}
+func (d *{{$.Name | pascalCase}}DAL) invalidateListBy{{. | pascalCase}}(ctx context.Context, {{. | camelCase}} {{toGoType $column.Type $column.AllowNull}}) {
+    pattern := fmt.Sprintf("{{$.Name | snakeCase}}_list_{{$.Version}}:{{. | snakeCase}}_%d:*", {{. | camelCase}})
+
+    var cursor uint64
+    for {
+        var keys []string
+        var err error
+        keys, cursor, err = d.cache.Scan(ctx, cursor, pattern, 1000).Result()
+        if err != nil {
+            // handle error
+            break
+        }
+        if len(keys) > 0 {
+            d.cache.Del(ctx, keys...)
+        }
+        if cursor == 0 {
+            break
+        }
+    }
+}
+    {{- end}}
+{{- end}}
+
+{{end}}

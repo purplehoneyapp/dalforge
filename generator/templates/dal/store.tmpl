@@ -1,0 +1,28 @@
+{{define "store"}}
+{{- $column := index .Root.Columns .ColumnName }}
+
+func (d *{{.Root.Name | pascalCase}}DAL) Store(ctx context.Context, entity *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+	const operation = "store"
+	dalOperationsTotal.WithLabelValues("{{.Root.Name | pascalCase}}", operation).Inc()
+
+	var result *{{.Root.Name | pascalCase}}
+	var err error
+
+	if entity.ID > 0 {
+		// Update existing entity
+		err = d.Update(ctx, entity)
+		result = entity // Return the same entity after update
+	} else {
+		// Create new entity
+		result, err = d.Create(ctx, entity)
+	}
+
+	// Handle errors
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+{{end}}

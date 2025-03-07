@@ -1,0 +1,64 @@
+{{define "create"}}
+{{- $column := index .Root.Columns .ColumnName }}
+
+func (d *{{.Root.Name | pascalCase}}DAL) Create(ctx context.Context, {{.Root.Name | camelCase}} *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+	const operation = "create"
+	start := time.Now()
+	dalOperationsTotal.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+
+	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return d.create(ctx, {{.Root.Name | camelCase}})
+	})
+
+	if err != nil {
+		dbRequestsErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+		return nil, err
+	}
+
+	dbRequestsLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(start).Seconds())
+
+	if result == nil {
+		return nil, err
+	}
+
+	return result.(*{{.Root.Name | pascalCase}}), err
+}
+
+func (d *{{.Root.Name | pascalCase}}DAL) create(ctx context.Context, entity *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+	query := `
+		INSERT INTO {{.Root.Name | snakeCase}}s (
+			{{template "comma_separated_columns" .}}
+		VALUES (
+			{{- range $index, $colName := keys .Root.Columns -}}
+				?{{if ne $index (sub (len (keys $.Root.Columns)) 1)}},{{end}}
+			{{- end }})
+	`
+
+	result, err := d.db.ExecContext(ctx, query,
+    {{- range $colName, $col := .Root.Columns}}
+        entity.{{$colName | pascalCase}},
+    {{- end}})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert {{.Root.Name | pascalCase}}: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	entity.ID = id
+	return entity, nil
+}
+{{end}}
+
+{{define "comma_separated_columns"}}
+	{{- $total := len .Root.Columns -}}
+	{{- $index := 0 -}}
+	{{- range $colName, $col := .Root.Columns -}}
+		{{$colName | snakeCase}}
+		{{- $index = add $index 1 -}}
+		{{- if lt $index $total }},{{end}}
+	{{- end}}
+{{end}}

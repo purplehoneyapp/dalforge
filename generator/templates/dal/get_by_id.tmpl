@@ -1,0 +1,86 @@
+
+{{define "get_by_id"}}
+func (d *{{.Name | pascalCase}}DAL) GetByID(ctx context.Context, id int64) (*{{.Name | pascalCase}}, error) {
+    const operation = "get_by_id"
+    cacheStart := time.Now()
+    dalOperationsTotal.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+
+    cacheKey := fmt.Sprintf("{{.Name | snakeCase}}_id_{{.Version}}:%d", id) // Versioning cache key
+
+    var entity {{.Name | pascalCase}}
+	result, err := d.cacheBreaker.Execute(func() (interface{}, error) {
+		cachedData, err := d.cache.Get(ctx, cacheKey).Bytes()
+		if err != nil {
+            dalCacheErrors.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+			return nil, err
+		}
+
+		dec := gob.NewDecoder(bytes.NewReader(cachedData))
+		err = dec.Decode(&entity)
+        if err != nil {
+            return nil, errors.New("cache decode error")
+		}
+
+        dalCacheHits.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+        return &entity, nil
+	})
+
+    // we got data from cache.
+	if err == nil {
+        dalCacheLatency.WithLabelValues("{{.Name | snakeCase}}", operation).Observe(time.Since(cacheStart).Seconds())
+		return result.(*{{.Name | pascalCase}}), nil
+	}
+
+    // Cache missed or error during fetching cached data
+	dalCacheMisses.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+    dbStart := time.Now();
+
+	// Fallback to database if cache miss or decoding fails
+	result, err = d.dbBreaker.Execute(func() (interface{}, error) {
+		return d.getByID(ctx, id)
+	})
+
+	if err != nil {
+        dbRequestsErrors.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+		return nil, err
+	}
+	entity = *result.(*{{.Name | pascalCase}})
+
+	// Store in cache with new format
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if enc.Encode(entity) == nil {
+        dalCacheWrites.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+		d.cache.Set(ctx, cacheKey, buf.Bytes(), time.Minute*{{.Caching.SingleExpirationSeconds}})
+	}
+
+    dbRequestsLatency.WithLabelValues("{{.Name | snakeCase}}", operation).Observe(time.Since(dbStart).Seconds())
+    return result.(*{{.Name | pascalCase}}), err
+}
+
+func (d *{{.Name | pascalCase}}DAL) getByID(ctx context.Context, id int64) (*{{.Name | pascalCase}}, error) {
+    query := `
+        SELECT id, {{range $colName, $col := .Columns}}{{$colName | snakeCase}}, {{end}}created, updated
+        FROM {{.Name | snakeCase}}s
+        WHERE id = ?
+    `
+
+    row := d.db.QueryRowContext(ctx, query, id)
+    var entity {{.Name | pascalCase}}
+    err := row.Scan(
+        &entity.ID,
+        {{range $colName, $col := .Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
+        {{end}}{{end}}&entity.Created,
+        &entity.Updated,
+    )
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, ErrNotFound
+        }
+        return nil, fmt.Errorf("failed to get {{.Name | pascalCase}} by ID: %w", err)
+    }
+    return &entity, nil
+}
+
+{{end}}
+
