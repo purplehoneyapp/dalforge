@@ -1,44 +1,62 @@
 {{define "delete"}}
-{{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+
 // Deletes entity by id,
 // returns ErrNotFound in case nothing is deleted.
-func (d *{{.Root.Name | pascalCase}}DAL) Delete(ctx context.Context, entity *{{.Root.Name | pascalCase}}) error {
+func (d *{{$entityStructName}}DAL) Delete(ctx context.Context, entity *{{$entityStructName}}) error {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return ErrOperationBlocked
+    }
+
 	if entity.ID == 0 {
 		// nothing can be deleted as entity is not created.
 		return ErrNotFound
 	}
 
 	const operation = "delete"
-	start := time.Now()
-	dalOperationsTotal.WithLabelValues("{{.Root.Name | pascalCase }}", operation).Inc()
-
-	d.InvalidateCache(ctx, entity)
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName }}", operation).Inc()
 
 	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return nil, d.delete(ctx, entity.ID)
 	})
 
 	if err != nil {
-		dbRequestsErrors.WithLabelValues("{{.Root.Name | pascalCase}}", operation).Inc()
 		return err
 	}
 
-	dbRequestsLatency.WithLabelValues("{{.Root.Name | pascalCase}}", operation).Observe(time.Since(start).Seconds())
+	// Lets clear item from cache and on next use use DB as source of truth
+	d.InvalidateCache(entity)
+	d.FlushListCache()
+
 	return err
 }
 
-func (d *{{.Root.Name | pascalCase}}DAL) delete(ctx context.Context, id int64) error {
+func (d *{{$entityStructName}}DAL) delete(ctx context.Context, id int64) error {
+	start := time.Now()
+	const operation = "delete"
+
 	query := `
-		DELETE FROM {{.Root.Name | snakeCase}}s
+		DELETE FROM {{$entityTableName}}s
 		WHERE id = ?
 	`
-	res, err := d.db.ExecContext(ctx, query, id)
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
+    if dbErr != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return dbErr
+    }
+
+	res, err := db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete {{.Root.Name | snakeCase}}: %w", err)
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return fmt.Errorf("failed to delete {{$entityTableName}}: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -46,6 +64,7 @@ func (d *{{.Root.Name | pascalCase}}DAL) delete(ctx context.Context, id int64) e
 		return ErrNotFound
 	}
 
+	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
 	return nil
 }
 {{end}}

@@ -1,55 +1,85 @@
 {{define "update"}}
-{{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{.Root.Name | pascalCase}}DAL) Update(ctx context.Context, entity *{{.Root.Name | pascalCase}}) error {
+// ErrNotFound is returned in case there was nothing to update; either missing id or newer version of entity is already stored.
+func (d *{{$entityStructName}}DAL) Update(ctx context.Context, entity *{{$entityStructName}}) error {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return ErrOperationBlocked
+    }
+
 	const operation = "update"
-	start := time.Now()
-	dalOperationsTotal.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
-	old, _ := d.GetByID(ctx, entity.ID) // Fetch old data before update
+	// 1. Get existing entity to check for changes. Required for proper cache invalidation.
+	existing, err := d.GetByID(ctx, entity.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing {{$entityStructName}}, id: %v, err: %w", entity.ID, err)
+	}
 
-	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
+	// 2. Check if any unique column used in Gets changed
+	{{checkColumnsChanged .Root}}
+
+	// Perform the update in DB.
+	_, err = d.dbBreaker.Execute(func() (interface{}, error) {
 		return nil, d.update(ctx, entity)
 	})
 
 	if err != nil {
-		dbRequestsErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
 		return err
 	}
 
-	dbRequestsLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(start).Seconds())
+	{{invalidateUniqueColumnsCache .Root}}
 
-	if err == nil {
-        d.InvalidateCache(ctx, entity)
+	// Lets clear item from cache and on next use use DB as source of truth
+	d.InvalidateCache(entity)
+	d.FlushListCache()
 
-        // Invalidate cached lists for old and new
-		{{- range .Root.Operations.Lists }}
-			{{- if eq . "id"}}
-			{{- else}}
-		if old != nil && old.Age != entity.{{. | pascalCase}} {
-			d.invalidateListBy{{. | pascalCase}}(ctx, old.{{. | pascalCase}})
-		}
-			{{- end}}
-		{{- end}}
-    }
+	entity.version++
 
 	return nil
 }
 
-func (d *{{.Root.Name | pascalCase}}DAL) update(ctx context.Context, {{.Root.Name | camelCase}} *{{.Root.Name | pascalCase}}) error {
+func (d *{{$entityStructName}}DAL) update(ctx context.Context, entity *{{$entityStructName}}) error {
+	const operation = "update"
+	start := time.Now()
+
+	entity.Updated = time.Now()
+
 	query := `
-		UPDATE {{.Root.Name | snakeCase}}s
-		SET {{template "comma_separated_update" .}}
-		WHERE id = ?
+		UPDATE {{$entityTableName}}s
+		SET {{template "comma_separated_update" .}}, updated=?, version = version + 1
+		WHERE id = ? AND version = ?
 	`
-	_, err := d.db.ExecContext(ctx, query,
-    {{- range $colName, $col := .Root.Columns}}
-        {{$.Root.Name | camelCase}}.{{$colName | pascalCase}},
-    {{- end}}{{$.Root.Name | camelCase}}.ID)
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
+    if dbErr != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return dbErr
+    }
+
+	res, err := db.ExecContext(ctx, query,
+    {{- goFuncCallParameters "entity" .Root.Columns }},
+	entity.Updated, entity.ID, entity.version)
 
 	if err != nil {
-		return fmt.Errorf("failed to update {{.Root.Name | pascalCase}}: %w", err)
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return fmt.Errorf("failed to update {{$entityStructName}}: %w", err)
 	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+
 	return nil
 }
 {{end}}
@@ -58,8 +88,6 @@ func (d *{{.Root.Name | pascalCase}}DAL) update(ctx context.Context, {{.Root.Nam
 	{{- $total := len .Root.Columns -}}
 	{{- $index := 0 -}}
 	{{- range $colName, $col := .Root.Columns -}}
-		{{$colName | snakeCase}} = ?
-		{{- $index = add $index 1 -}}
-		{{- if lt $index $total }}, {{end}}
+		{{$colName | snakeCase}} = ?{{- $index = add $index 1 -}}{{- if lt $index $total }}, {{- end}}
 	{{- end}}
-{{end}}
+{{- end}}

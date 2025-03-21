@@ -1,64 +1,81 @@
 {{define "create"}}
 {{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{.Root.Name | pascalCase}}DAL) Create(ctx context.Context, {{.Root.Name | camelCase}} *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+func (d *{{$entityStructName}}DAL) Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
+	if entity.ID > 0 {
+		return nil, fmt.Errorf("{{$entityStructName}}DAL.Create failed as ID > 0")
+	}
+
 	const operation = "create"
-	start := time.Now()
-	dalOperationsTotal.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
-	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.create(ctx, {{.Root.Name | camelCase}})
+	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return d.create(ctx, entity)
 	})
 
 	if err != nil {
-		dbRequestsErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
 		return nil, err
 	}
 
-	dbRequestsLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(start).Seconds())
+	d.setCached(entity)
 
-	if result == nil {
-		return nil, err
-	}
+	// All lists cache should be flushed.
+	d.FlushListCache()
 
-	return result.(*{{.Root.Name | pascalCase}}), err
+	return entity, err
 }
 
-func (d *{{.Root.Name | pascalCase}}DAL) create(ctx context.Context, entity *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+func (d *{{$entityStructName}}DAL) create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+	const operation = "create"
+	start := time.Now()
+
+	entity.Created = time.Now()
+	entity.Updated = time.Now()
+
 	query := `
-		INSERT INTO {{.Root.Name | snakeCase}}s (
-			{{template "comma_separated_columns" .}}
+		INSERT INTO {{$entityTableName}}s ({{template "comma_separated_columns" .Root.Columns}},created,updated)
 		VALUES (
-			{{- range $index, $colName := keys .Root.Columns -}}
-				?{{if ne $index (sub (len (keys $.Root.Columns)) 1)}},{{end}}
-			{{- end }})
+			{{- range $index, $colName := keys .Root.Columns -}}?,{{- end }}?,?)
 	`
 
-	result, err := d.db.ExecContext(ctx, query,
-    {{- range $colName, $col := .Root.Columns}}
-        entity.{{$colName | pascalCase}},
-    {{- end}})
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
+    if dbErr != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, dbErr
+    }
+
+	result, err := db.ExecContext(ctx, query,
+		{{- goFuncCallParameters "entity" .Root.Columns }},
+		entity.Created, entity.Updated)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert {{.Root.Name | pascalCase}}: %w", err)
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return nil, fmt.Errorf("failed to insert {{$entityStructName}}: %w", err)
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 		return nil, fmt.Errorf("failed to get last insert ID: %w", err)
 	}
 
 	entity.ID = id
+	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
 	return entity, nil
 }
 {{end}}
 
 {{define "comma_separated_columns"}}
-	{{- $total := len .Root.Columns -}}
+	{{- $total := len . -}}
 	{{- $index := 0 -}}
-	{{- range $colName, $col := .Root.Columns -}}
-		{{$colName | snakeCase}}
-		{{- $index = add $index 1 -}}
-		{{- if lt $index $total }},{{end}}
+	{{- range $colName, $col := . -}}
+		{{$colName | snakeCase}},
 	{{- end}}
 {{end}}

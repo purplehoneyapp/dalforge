@@ -58,7 +58,7 @@ func generate(cmd *cobra.Command, args []string) {
 			baseName := strings.TrimSuffix(fileName, ".yaml")
 
 			inputFile := filepath.Join(inputDir, entry.Name())
-			goPath := filepath.Join(outputDir, baseName+".go")
+			goPath := filepath.Join(outputDir, baseName+".gen.go")
 			sqlPath := filepath.Join(outputDir, baseName+".sql")
 
 			// Print out the would-be generated file paths
@@ -92,6 +92,11 @@ func generate(cmd *cobra.Command, args []string) {
 			sqlFile, err := generator.GenerateSQL(yamlContent)
 			if err != nil {
 				log.Fatalf("failed GenerateSQL on file %s, %v", inputFile, err)
+			}
+
+			err = generator.CopyOtherFiles(outputDir)
+			if err != nil {
+				log.Fatalf("failed writing dbprovider to path %s, %v", outputDir, err)
 			}
 
 			err = os.WriteFile(sqlPath, []byte(sqlFile), 0644)

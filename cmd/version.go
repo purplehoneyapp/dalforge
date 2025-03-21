@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-
+	"dalcreator/version"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +12,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number of dalcreator",
 	Long:  `All software has versions. This is dalcreator's.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("dalcreator v1.0.0")
+		fmt.Printf("dalcreator %v\n", version.Version)
 	},
 }
 

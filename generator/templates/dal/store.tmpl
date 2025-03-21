@@ -1,11 +1,17 @@
 {{define "store"}}
-{{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{.Root.Name | pascalCase}}DAL) Store(ctx context.Context, entity *{{.Root.Name | pascalCase}}) (*{{.Root.Name | pascalCase}}, error) {
+func (d *{{$entityStructName}}DAL) Store(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
 	const operation = "store"
-	dalOperationsTotal.WithLabelValues("{{.Root.Name | pascalCase}}", operation).Inc()
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
-	var result *{{.Root.Name | pascalCase}}
+	var result *{{$entityStructName}}
 	var err error
 
 	if entity.ID > 0 {

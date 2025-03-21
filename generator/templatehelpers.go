@@ -179,3 +179,80 @@ func sub(a, b int) int {
 func add(a, b int) int {
 	return a + b
 }
+
+// Gets all the column names from all lists config and output all indexes.
+func listSQLIndexes(tableName string, columns map[string]Column, lists []ListConfig) string {
+	// Create a set to keep track of columns that need an index.
+	indexedColumns := make(map[string]bool)
+	defaultColumns := map[string]bool{
+		"created": true,
+		"updated": true,
+	}
+
+	// Iterate over each list configuration.
+	for _, list := range lists {
+		for colName := range columns {
+			// Check if the column name is found in the Where or Order clause.
+			// This uses a simple substring match. You might want to refine this
+			// with more precise parsing if needed.
+			if strings.Contains(list.Where, colName) || strings.Contains(list.Order, colName) {
+				indexedColumns[colName] = true
+			}
+		}
+		for colName := range defaultColumns {
+			if strings.Contains(list.Where, colName) || strings.Contains(list.Order, colName) {
+				indexedColumns[colName] = true
+			}
+		}
+	}
+
+	// Build the CREATE INDEX statements.
+	var builder strings.Builder
+	for colName := range indexedColumns {
+		// Customize the table name as needed.
+		builder.WriteString(fmt.Sprintf("CREATE INDEX idx_%s ON %ss (%s);\n",
+			SnakeCaser(colName), SnakeCaser(tableName), SnakeCaser(colName)))
+	}
+
+	return builder.String()
+}
+
+/*
+	 Would output something like this for any column that has get operation:
+		var oldEmail string
+		if existing.Email != entity.Email {
+			oldEmail = existing.Email
+		}
+*/
+func checkColumnsChanged(config EntityConfig) string {
+	result := ""
+	for _, colName := range config.Operations.Gets {
+		col := config.Columns[colName]
+		result += fmt.Sprintf(`
+	var old%s %s
+	if existing.%s != entity.%s {
+		old%s = existing.%s
+	}
+		`, PascalCaser(colName), toGoType(col.Type, col.AllowNull), PascalCaser(colName), PascalCaser(colName),
+			PascalCaser(colName), PascalCaser(colName))
+	}
+
+	return result
+}
+
+func invalidateUniqueColumnsCache(config EntityConfig) string {
+	result := ""
+
+	for _, colName := range config.Operations.Gets {
+		result += fmt.Sprintf(`
+	// 3. Invalidate old uniquecol -> id cache if changed
+	if old%s != "" {
+		oldCacheKey := fmt.Sprintf("user_%s:%%s", old%s)
+		d.cache.Delete(oldCacheKey)
+		d.cacheProvider.InvalidateCache("%s", oldCacheKey)
+	}`, PascalCaser(colName), SnakeCaser(colName), PascalCaser(colName), SnakeCaser(config.Name))
+
+	}
+
+	return result
+}

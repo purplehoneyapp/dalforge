@@ -1,0 +1,48 @@
+name: user
+version: v1
+columns:
+  status:
+    type: string
+    allowNull: true
+  uuid:
+    type: string
+    unique: true
+  email:
+    type: string
+    allowNull: false
+    unique: true
+  birthdate:
+    type: date
+    allowNull: true
+  age:
+    type: int8
+
+operations:
+  store: true
+  delete: true
+  gets:
+    - email
+    - uuid
+  lists:
+    - name: list_by_id
+    - name: list_by_bday
+      where: birthdate = :birthdate
+      order: created
+      desc: true
+    - name: list_by_age
+      where: age = :age
+      order: created
+     # desc: true   # default is false
+    - name: list_by_status
+      where: status = :status
+      order: created
+circuitbreaker:
+  timeoutSeconds: 20 # how long to wait while in open state before trying to go to half open state.
+  consecutiveFailures: 4 # how many times to fail in an closed state before we swithc to open state
+caching:
+  type: redis # Potential values could be: none, redis
+  singleExpirationSeconds: 300
+  listExpirationSeconds: 60
+  listInvalidation: flush # potential values could be: expire, flush (default is flush)
+  maxItemsCount: 100000 # max number of items in cache
+

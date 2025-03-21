@@ -1,14 +1,18 @@
 CREATE TABLE {{.Name | snakeCase}}s (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    {{range $colName, $col := .Columns}}
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    version INT,
+    {{- range $colName, $col := .Columns}}
     {{$colName | snakeCase}} {{toSQLType $col.Type}}{{if not $col.AllowNull}} NOT NULL{{end}},
-    {{end}}
-    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    {{- end}}
+    created TIMESTAMP,
+    updated TIMESTAMP
 ) ENGINE=InnoDB;
 
-{{range .Operations.Gets}}
 # Unique indexes as they serve Get operations returning single entity
+{{- range .Operations.Gets}}
 {{- $column := index $.Columns . }}
 CREATE UNIQUE INDEX idx_{{. | snakeCase}} ON {{$.Name | snakeCase}}s ({{. | snakeCase}});
-{{end}}
+{{- end}}
+
+# Indexes that serve all the list operations
+{{ listSQLIndexes .Name .Columns .Operations.Lists }}

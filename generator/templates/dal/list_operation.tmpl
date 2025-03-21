@@ -1,0 +1,132 @@
+{{define "list_operation"}}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+
+func (d *{{$entityStructName}}DAL) {{.List.Name | pascalCase}}(ctx context.Context, {{listFuncParams .List .Root.Columns}}) ([]*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
+	const operation = "{{.List.Name | snakeCase}}"
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+    cacheKey := {{listCacheKey $entityTableName .List .Root.Columns}}
+    val, found := d.listCache.Get(cacheKey)
+    if found {
+        entityIDs, ok := val.([]int64)
+        if !ok {
+            return nil, fmt.Errorf("{{$entityStructName}}DAL.{{.List.Name | pascalCase}}: Cache returned wrong type; expected array ID type")
+        }
+
+        var entities []*{{$entityStructName}}
+        missingEntries := false
+        for _, id := range entityIDs {
+            entity, err := d.getByIDCached(id)
+            if err != nil {
+                // failed using cache
+                return nil, err
+            }
+
+            if entity == nil {
+                // we have one or more missing entity in cache somehow. reload the whole list.
+                missingEntries = true
+                break
+            }
+
+            entities = append(entities, entity)
+        }
+
+        if !missingEntries {
+            dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+            return entities, nil
+        }
+    }
+
+    // Otherwise, it's a cache miss or decode error
+    dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+    // 2) Fallback to DB
+    result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+        return d.{{.List.Name | camelCase}}(ctx, {{listQueryParams false .List .Root.Columns}})
+    })
+
+    if err != nil {
+        // DB also failed
+        return nil, err
+    }
+
+    entities := result.([]*{{$entityStructName}})
+    // Store Cache. cacheKey = user_list_by_id:startID:pageSize.
+	// Stored is array of entity IDs.
+	var entityIDs []int64
+	for _, entity := range entities {
+		entityIDs = append(entityIDs, entity.ID)
+        // cache each entity individualy
+        d.setCached(entity)
+	}
+	d.listCache.Set(cacheKey, entityIDs, time.Second*{{.Root.Caching.ListExpirationSeconds}})
+
+    return entities, nil
+}
+
+func (d *{{$entityStructName}}DAL) {{.List.Name | camelCase}}(ctx context.Context, {{listFuncParams .List .Root.Columns}}) ([]*{{$entityStructName}}, error) {
+    const operation = "{{.List.Name | snakeCase}}"
+	dbStart := time.Now()
+
+    var query string
+
+    // if startID is zero then query is different for pagination
+    if startID == 0 {
+        query = `{{listQuery true $entityStructName .List .Root.Columns}}`
+    } else {
+        query = `{{listQuery false $entityStructName .List .Root.Columns}}`
+    }
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
+    if dbErr != nil {
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, dbErr
+    }
+
+    var rows *sql.Rows
+    var err error
+
+    if startID == 0 {
+	    rows, err = db.QueryContext(ctx, query, {{listQueryParams true .List .Root.Columns}})
+    } else {
+        rows, err = db.QueryContext(ctx, query, {{listQueryParams false .List .Root.Columns}})
+    }
+
+	if err != nil {
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return nil, fmt.Errorf("failed to query {{$entityTableName}}s: %w", err)
+	}
+	defer rows.Close()
+
+	var entities []*{{$entityStructName}}
+	for rows.Next() {
+		var entity {{$entityStructName}}
+		err := rows.Scan(
+			&entity.ID,
+            &entity.version,
+            {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
+            {{end}}{{end}}&entity.Created,
+            &entity.Updated,
+		)
+		if err != nil {
+            dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+			return nil, fmt.Errorf("failed to scan {{$entityStructName}}: %w", err)
+		}
+		entities = append(entities, &entity)
+	}
+
+	if err = rows.Err(); err != nil {
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+	return entities, nil
+}
+{{end}}

@@ -1,0 +1,28 @@
+name: post
+version: v1
+columns:
+  target_age:
+    type: int8
+  post:
+    type: string
+  deleted:
+    type: bool
+operations:
+  store: true
+  delete: true
+  gets:
+  lists:
+    - name: list_by_id
+    - name: recent_posts
+      where: deleted = 0 and target_age = :target_age # use :col_name to make it an argument of a function
+      order: created
+      descending: true
+circuitbreaker:
+    timeoutSeconds: 30 # how long to wait while in open state before trying to go to half open state.
+    consecutiveFailures: 5 # how many times to fail in an closed state before we swithc to open state
+caching:
+  type: redis # Potential values could be: none, redis
+  singleExpirationSeconds: 300
+  listExpirationSeconds: 60
+  listInvalidation: flush # potential values could be: expire, flush (default is flush)
+  maxItemsCount: 1000000 # max number of items in cache

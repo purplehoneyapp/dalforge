@@ -1,75 +1,74 @@
 {{define "get_operation"}}
 {{- $column := index .Root.Columns .ColumnName }}
-func (d *{{.Root.Name | pascalCase}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{.Root.Name | pascalCase}}, error) {
-const operation = "get_by_{{.ColumnName | snakeCase}}"
-    cacheStart := time.Now()
-    dalOperationsTotal.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
 
-    cacheKey := fmt.Sprintf("{{.Root.Name | snakeCase}}_{{.ColumnName | snakeCase}}_{{.Root.Version}}:%d", {{.ColumnName | camelCase}}) // Versioning cache key
+func (d *{{$entityStructName}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
 
-    var entity {{.Root.Name | pascalCase}}
-	result, err := d.cacheBreaker.Execute(func() (interface{}, error) {
-		cachedData, err := d.cache.Get(ctx, cacheKey).Bytes()
-		if err != nil {
-            dalCacheErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
-			return nil, err
-		}
+    const operation = "get_by_{{.ColumnName | snakeCase}}"
+    dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
-		dec := gob.NewDecoder(bytes.NewReader(cachedData))
-		err = dec.Decode(&entity)
-        if err != nil {
-            return nil, errors.New("cache decode error")
-		}
+    // key would for example be: user_email:test@something.com, but in this case cache is only mapping email -> id
+    cacheKey := fmt.Sprintf("{{$entityTableName}}_{{.ColumnName | snakeCase}}:%v", {{.ColumnName | camelCase}})
 
-        dalCacheHits.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
-        return &entity, nil
-	})
+    // Fetch from cache {{.ColumnName | pascalCase}} -> ID mapping
+    val, found := d.cache.Get(cacheKey)
+    if found {
+        entityId, ok := val.(int64)
+        if !ok {
+            return nil, fmt.Errorf("{{$entityStructName}}DAL.GetBy{{.ColumnName | pascalCase}}: Cache returned wrong type; expected ID type")
+        }
 
-    // we got data from cache.
-	if err == nil {
-        dalCacheLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(cacheStart).Seconds())
-		return result.(*{{.Root.Name | pascalCase}}), nil
-	}
+        dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        // return entity by that id
+        return d.GetByID(ctx, entityId)
+    }
 
     // Cache missed or error during fetching cached data
-	dalCacheMisses.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
-    dbStart := time.Now();
+	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
 	// Fallback to database if cache miss or decoding fails
-	result, err = d.dbBreaker.Execute(func() (interface{}, error) {
+	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return d.getBy{{.ColumnName | pascalCase}}(ctx, {{.ColumnName | camelCase}})
 	})
 
 	if err != nil {
-        dbRequestsErrors.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
 		return nil, err
 	}
-	entity = *result.(*{{.Root.Name | pascalCase}})
+	entity := result.(*{{$entityStructName}})
 
-	// Store in cache with new format
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if enc.Encode(entity) == nil {
-        dalCacheWrites.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Inc()
-		d.cache.Set(ctx, cacheKey, buf.Bytes(), time.Minute*{{.Root.Caching.SingleExpirationSeconds}})
-	}
+	// Store in cache {{.ColumnName | pascalCase}} -> ID mapping
+    dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    d.cache.Set(cacheKey, entity.ID, time.Second*{{.Root.Caching.SingleExpirationSeconds}})
 
-    dbRequestsLatency.WithLabelValues("{{.Root.Name | snakeCase}}", operation).Observe(time.Since(dbStart).Seconds())
-    return result.(*{{.Root.Name | pascalCase}}), err
-
+    return entity, err
 }
 
-func (d *{{.Root.Name | pascalCase}}DAL) getBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{.Root.Name | pascalCase}}, error) {
+func (d *{{$entityStructName}}DAL) getBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
+    const operation = "get_by_{{.ColumnName | snakeCase}}"
+    dbStart := time.Now()
+
     query := `
-        SELECT id, {{range $colName, $col := .Root.Columns}}{{$colName | snakeCase}}, {{end}}created, updated
-        FROM {{.Root.Name | snakeCase}}s
+        SELECT {{querySelect .Root.Columns}}
+        FROM {{$entityTableName}}s
         WHERE {{.ColumnName | snakeCase}} = ?
     `
 
-    row := d.db.QueryRowContext(ctx, query, {{.ColumnName | camelCase}})
-    var entity {{.Root.Name | pascalCase}}
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
+    if dbErr != nil {
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, dbErr
+    }
+
+    row := db.QueryRowContext(ctx, query, {{.ColumnName | camelCase}})
+    var entity {{$entityStructName}}
     err := row.Scan(
         &entity.ID,
+        &entity.version,
         {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
         {{end}}{{end}}&entity.Created,
         &entity.Updated,
@@ -78,8 +77,12 @@ func (d *{{.Root.Name | pascalCase}}DAL) getBy{{.ColumnName | pascalCase}}(ctx c
         if errors.Is(err, sql.ErrNoRows) {
             return nil, ErrNotFound
         }
-        return nil, fmt.Errorf("failed to get {{.Root.Name | pascalCase}} by {{.ColumnName | pascalCase}}: %w", err)
+
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, fmt.Errorf("failed to get {{$entityStructName}} by {{.ColumnName | pascalCase}}: %w", err)
     }
+
+    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
     return &entity, nil
 }
 {{end}}

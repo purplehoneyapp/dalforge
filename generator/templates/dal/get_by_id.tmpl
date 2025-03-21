@@ -1,84 +1,115 @@
-
 {{define "get_by_id"}}
-func (d *{{.Name | pascalCase}}DAL) GetByID(ctx context.Context, id int64) (*{{.Name | pascalCase}}, error) {
+{{- $entityStructName := pascalCase .Name }}
+{{- $entityTableName := snakeCase .Name }}
+{{- $entityArgumentName := camelCase .Name }}
+
+func (d *{{$entityStructName}}DAL) GetByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
     const operation = "get_by_id"
-    cacheStart := time.Now()
-    dalOperationsTotal.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
+    dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
-    cacheKey := fmt.Sprintf("{{.Name | snakeCase}}_id_{{.Version}}:%d", id) // Versioning cache key
-
-    var entity {{.Name | pascalCase}}
-	result, err := d.cacheBreaker.Execute(func() (interface{}, error) {
-		cachedData, err := d.cache.Get(ctx, cacheKey).Bytes()
-		if err != nil {
-            dalCacheErrors.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
-			return nil, err
-		}
-
-		dec := gob.NewDecoder(bytes.NewReader(cachedData))
-		err = dec.Decode(&entity)
-        if err != nil {
-            return nil, errors.New("cache decode error")
-		}
-
-        dalCacheHits.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
-        return &entity, nil
-	})
-
-    // we got data from cache.
-	if err == nil {
-        dalCacheLatency.WithLabelValues("{{.Name | snakeCase}}", operation).Observe(time.Since(cacheStart).Seconds())
-		return result.(*{{.Name | pascalCase}}), nil
-	}
-
-    // Cache missed or error during fetching cached data
-	dalCacheMisses.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
-    dbStart := time.Now();
+	// Load from cache
+    cachedEntity, _ := d.getByIDCached(id)
+    if cachedEntity != nil {
+        return cachedEntity, nil
+    }
 
 	// Fallback to database if cache miss or decoding fails
-	result, err = d.dbBreaker.Execute(func() (interface{}, error) {
+	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return d.getByID(ctx, id)
 	})
 
 	if err != nil {
-        dbRequestsErrors.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
 		return nil, err
 	}
-	entity = *result.(*{{.Name | pascalCase}})
 
-	// Store in cache with new format
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if enc.Encode(entity) == nil {
-        dalCacheWrites.WithLabelValues("{{.Name | snakeCase}}", operation).Inc()
-		d.cache.Set(ctx, cacheKey, buf.Bytes(), time.Minute*{{.Caching.SingleExpirationSeconds}})
-	}
+	entity, ok := result.(*{{$entityStructName}})
+    if !ok {
+        return nil, fmt.Errorf("invalid type")
+    }
 
-    dbRequestsLatency.WithLabelValues("{{.Name | snakeCase}}", operation).Observe(time.Since(dbStart).Seconds())
-    return result.(*{{.Name | pascalCase}}), err
+    _ = d.setCached(entity)
+
+    return entity, err
 }
 
-func (d *{{.Name | pascalCase}}DAL) getByID(ctx context.Context, id int64) (*{{.Name | pascalCase}}, error) {
+func (d *{{$entityStructName}}DAL) setCached(entity *{{$entityStructName}}) error {
+    // if we have not reached the maximum number of items set the cache. otherwise expirations will
+	// handle this
+    itemCount := d.cache.ItemCount()
+    if itemCount < {{.Caching.MaxItemsCount}} {
+        cacheKey := d.getCacheKey(entity.ID)
+
+        // Store in cache with new format
+        dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}").Inc()
+        dalCacheSizeGauge.WithLabelValues("{{$entityTableName}}").Set(float64(itemCount+1))
+
+        copy := *entity
+		d.cache.Set(cacheKey, &copy, time.Second*{{.Caching.SingleExpirationSeconds}})
+    }
+
+    return nil
+}
+
+// Gets entity from cache only or return nil
+func (d *{{$entityStructName}}DAL) getByIDCached(id int64) (*{{$entityStructName}}, error) {
+    const operation = "get_by_id"
+    cacheKey := d.getCacheKey(id)
+    val, found := d.cache.Get(cacheKey)
+    if found {
+        entity, ok := val.(*{{$entityStructName}})
+        if !ok {
+            return nil, fmt.Errorf("{{$entityStructName}}DAL.GetById: Cache returned wrong type")
+        }
+
+        dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        copy := *entity
+        return &copy, nil
+    }
+
+    // Cache missed or error during fetching cached data
+	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+    return nil, nil
+}
+
+func (d *{{$entityStructName}}DAL) getByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
+    const operation = "get_by_id"
+    dbStart := time.Now();
+
     query := `
-        SELECT id, {{range $colName, $col := .Columns}}{{$colName | snakeCase}}, {{end}}created, updated
-        FROM {{.Name | snakeCase}}s
+        SELECT {{querySelect .Columns}}
+        FROM {{$entityTableName}}s
         WHERE id = ?
     `
 
-    row := d.db.QueryRowContext(ctx, query, id)
-    var entity {{.Name | pascalCase}}
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
+    if dbErr != nil {
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, dbErr
+    }
+
+    row := db.QueryRowContext(ctx, query, id)
+    var entity {{$entityStructName}}
     err := row.Scan(
         &entity.ID,
-        {{range $colName, $col := .Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
-        {{end}}{{end}}&entity.Created,
+        &entity.version,
+        {{- range $colName, $col := .Columns}}&entity.{{$colName | pascalCase}},{{- end}}
+        &entity.Created,
         &entity.Updated,
     )
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
             return nil, ErrNotFound
         }
-        return nil, fmt.Errorf("failed to get {{.Name | pascalCase}} by ID: %w", err)
+        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        return nil, fmt.Errorf("failed to get {{$entityStructName}} by ID: %w", err)
     }
+
+    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
     return &entity, nil
 }
 
