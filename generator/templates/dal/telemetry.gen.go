@@ -6,6 +6,8 @@ import (
 )
 
 var (
+	HealthRegistry *prometheus.Registry
+
 	dalOperationsTotalCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "dal_operations_total",
@@ -125,18 +127,28 @@ func OnCircuitBreakerStateChange(name string, from gobreaker.State, to gobreaker
 	}
 }
 
+var initialized bool = false
+
 func init() {
-	prometheus.MustRegister(dalOperationsTotalCounter,
-		dbRequestsCounter,
-		dbRequestsErrorsCounter,
-		dbRequestsLatencyHistogram)
-	prometheus.MustRegister(circuitBreakerStateGauge)
-	prometheus.MustRegister(dalCacheHitsCounter,
-		dalCacheMissesCounter,
-		dalCacheLatencyHistogram,
-		dalCacheWritesCounter,
-		dalCacheErrorsCounter,
-		dalCacheDeletesCounter,
-		dalCacheSizeGauge)
-	prometheus.MustRegister(cachePublishedMessages, cacheReceivedMessages, cacheErrorCounter)
+	if !initialized {
+		initialized = true
+		//create a registry
+		HealthRegistry = prometheus.NewRegistry()
+		HealthRegistry.MustRegister(
+			dalOperationsTotalCounter,
+			dbRequestsCounter,
+			dbRequestsErrorsCounter,
+			dbRequestsLatencyHistogram,
+			circuitBreakerStateGauge,
+			dalCacheHitsCounter,
+			dalCacheMissesCounter,
+			dalCacheLatencyHistogram,
+			dalCacheWritesCounter,
+			dalCacheErrorsCounter,
+			dalCacheDeletesCounter,
+			dalCacheSizeGauge,
+			cachePublishedMessages,
+			cacheReceivedMessages,
+			cacheErrorCounter)
+	}
 }

@@ -12,31 +12,34 @@ func (d *{{$entityStructName}}DAL) Update(ctx context.Context, entity *{{$entity
 	const operation = "update"
 	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 
+	{{- if gt (len .Root.Operations.Gets) 0 }}
 	// 1. Get existing entity to check for changes. Required for proper cache invalidation.
 	existing, err := d.GetByID(ctx, entity.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing {{$entityStructName}}, id: %v, err: %w", entity.ID, err)
 	}
+	{{- end }}
 
-	// 2. Check if any unique column used in Gets changed
 	{{checkColumnsChanged .Root}}
 
 	// Perform the update in DB.
-	_, err = d.dbBreaker.Execute(func() (interface{}, error) {
+	_, err2 := d.dbBreaker.Execute(func() (interface{}, error) {
 		return nil, d.update(ctx, entity)
 	})
 
-	if err != nil {
-		return err
+	if err2 != nil {
+		return err2
 	}
 
 	{{invalidateUniqueColumnsCache .Root}}
 
-	// Lets clear item from cache and on next use use DB as source of truth
+	// Lets clear item from cache on other instances and here
 	d.InvalidateCache(entity)
 	d.FlushListCache()
 
 	entity.version++
+	// our entity can become part of local cache
+	d.setCached(entity)
 
 	return nil
 }

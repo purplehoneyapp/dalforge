@@ -40,7 +40,7 @@ func (d *{{$entityStructName}}DAL) create(ctx context.Context, entity *{{$entity
 	entity.Updated = time.Now()
 
 	query := `
-		INSERT INTO {{$entityTableName}}s ({{template "comma_separated_columns" .Root.Columns}},created,updated)
+		INSERT INTO {{$entityTableName}}s ({{- template "comma_separated_columns" .Root.Columns}}created,updated)
 		VALUES (
 			{{- range $index, $colName := keys .Root.Columns -}}?,{{- end }}?,?)
 	`

@@ -12,10 +12,10 @@ type DefaultConfigProvider struct{}
 
 // BlockedReads always returns true.
 func (d DefaultConfigProvider) BlockedReads(entityName string) bool {
-	return true
+	return false
 }
 
 // BlockedWrites always returns true.
 func (d DefaultConfigProvider) BlockedWrites(entityName string) bool {
-	return true
+	return false
 }

@@ -1,6 +1,6 @@
 CREATE TABLE {{.Name | snakeCase}}s (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    version INT,
+    version INT DEFAULT 0,
     {{- range $colName, $col := .Columns}}
     {{$colName | snakeCase}} {{toSQLType $col.Type}}{{if not $col.AllowNull}} NOT NULL{{end}},
     {{- end}}

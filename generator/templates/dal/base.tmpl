@@ -49,6 +49,14 @@ type {{$entityStructName}}DAL struct {
 func New{{$entityStructName}}DAL(provider DBProvider, cacheProvider CacheProvider,
     configProvider ConfigProvider, dbSettings gobreaker.Settings) *{{$entityStructName}}DAL {
 
+    if configProvider == nil {
+        configProvider = DefaultConfigProvider{}
+    }
+
+    if cacheProvider == nil {
+        cacheProvider = NoopCacheProvider{}
+    }
+
     if dbSettings.Name == "" {
         dbSettings.Name = "{{$entityTableName}}_dal"
     }

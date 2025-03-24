@@ -245,13 +245,11 @@ func invalidateUniqueColumnsCache(config EntityConfig) string {
 
 	for _, colName := range config.Operations.Gets {
 		result += fmt.Sprintf(`
-	// 3. Invalidate old uniquecol -> id cache if changed
 	if old%s != "" {
 		oldCacheKey := fmt.Sprintf("user_%s:%%s", old%s)
 		d.cache.Delete(oldCacheKey)
 		d.cacheProvider.InvalidateCache("%s", oldCacheKey)
 	}`, PascalCaser(colName), SnakeCaser(colName), PascalCaser(colName), SnakeCaser(config.Name))
-
 	}
 
 	return result

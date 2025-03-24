@@ -42,7 +42,7 @@ func (d *{{$entityStructName}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context
 	entity := result.(*{{$entityStructName}})
 
 	// Store in cache {{.ColumnName | pascalCase}} -> ID mapping
-    dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}").Inc()
     d.cache.Set(cacheKey, entity.ID, time.Second*{{.Root.Caching.SingleExpirationSeconds}})
 
     return entity, err

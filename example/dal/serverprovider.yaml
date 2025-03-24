@@ -1,0 +1,47 @@
+# config.yaml
+serverGroup:
+  - name: default
+    entites:
+      - user
+      - account
+    instances:
+      reads:
+        - server: readserver1.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+        - server: readserver2.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+      writes:
+        - server: writeserver1.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+  - name: money
+    entites:
+      - payments
+      - transactions
+    instances:
+      reads:
+        - server: readserver1.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+        - server: readserver2.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+      writes:
+        - server: writeserver1.domain
+          database: myapp
+          credentials:
+            user: myapp
+            pass: ${USER_DB_PASS}
+
