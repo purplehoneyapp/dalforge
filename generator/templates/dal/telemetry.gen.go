@@ -129,26 +129,49 @@ func OnCircuitBreakerStateChange(name string, from gobreaker.State, to gobreaker
 
 var initialized bool = false
 
+func registerTelemetry() {
+	//create a registry
+	HealthRegistry = prometheus.NewRegistry()
+	HealthRegistry.MustRegister(dalOperationsTotalCounter,
+		dbRequestsCounter,
+		dbRequestsErrorsCounter,
+		dbRequestsLatencyHistogram,
+		circuitBreakerStateGauge,
+		dalCacheHitsCounter,
+		dalCacheMissesCounter,
+		dalCacheLatencyHistogram,
+		dalCacheWritesCounter,
+		dalCacheErrorsCounter,
+		dalCacheDeletesCounter,
+		dalCacheSizeGauge,
+		cachePublishedMessages,
+		cacheReceivedMessages,
+		cacheErrorCounter)
+}
+
+// Removes all telemetry collectors registered
+func unregisterTelemetry() {
+	dalOperationsTotalCounter.Reset()
+	dbRequestsCounter.Reset()
+	dbRequestsErrorsCounter.Reset()
+	dbRequestsLatencyHistogram.Reset()
+	circuitBreakerStateGauge.Reset()
+	dalCacheHitsCounter.Reset()
+	dalCacheMissesCounter.Reset()
+	dalCacheLatencyHistogram.Reset()
+	dalCacheWritesCounter.Reset()
+	dalCacheErrorsCounter.Reset()
+	dalCacheDeletesCounter.Reset()
+	dalCacheSizeGauge.Reset()
+	cachePublishedMessages.Reset()
+	cacheReceivedMessages.Reset()
+	cacheErrorCounter.Reset()
+	HealthRegistry = prometheus.NewRegistry()
+}
+
 func init() {
 	if !initialized {
 		initialized = true
-		//create a registry
-		HealthRegistry = prometheus.NewRegistry()
-		HealthRegistry.MustRegister(
-			dalOperationsTotalCounter,
-			dbRequestsCounter,
-			dbRequestsErrorsCounter,
-			dbRequestsLatencyHistogram,
-			circuitBreakerStateGauge,
-			dalCacheHitsCounter,
-			dalCacheMissesCounter,
-			dalCacheLatencyHistogram,
-			dalCacheWritesCounter,
-			dalCacheErrorsCounter,
-			dalCacheDeletesCounter,
-			dalCacheSizeGauge,
-			cachePublishedMessages,
-			cacheReceivedMessages,
-			cacheErrorCounter)
+		registerTelemetry()
 	}
 }

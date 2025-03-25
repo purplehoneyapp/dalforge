@@ -78,6 +78,8 @@ func (d *{{$entityStructName}}DAL) update(ctx context.Context, entity *{{$entity
 	}
 
 	if rowsAffected == 0 {
+		// clean out cache for specific ID to limit stale cache entries
+		d.InvalidateCache(entity)
 		return ErrNotFound
 	}
 

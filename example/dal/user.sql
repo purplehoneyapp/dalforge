@@ -5,7 +5,7 @@ CREATE TABLE users (
     birthdate DATE,
     email VARCHAR(255) NOT NULL,
     status VARCHAR(255),
-    uuid VARCHAR(255) NOT NULL,
+    uuid CHAR(36) NOT NULL,
     created TIMESTAMP,
     updated TIMESTAMP
 ) ENGINE=InnoDB;
@@ -16,7 +16,7 @@ CREATE UNIQUE INDEX idx_uuid ON users (uuid);
 
 # Indexes that serve all the list operations
 CREATE INDEX idx_birthdate ON users (birthdate);
-CREATE INDEX idx_created ON users (created);
 CREATE INDEX idx_age ON users (age);
+CREATE INDEX idx_created ON users (created);
 CREATE INDEX idx_status ON users (status);
 

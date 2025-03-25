@@ -104,7 +104,7 @@ loop:
 
 	// Just test FlushList
 	flushResultCh := make(chan string, 1)
-	provider.OnCacheFluhsList("test", func() {
+	provider.OnCacheFlushList("test", func() {
 		flushResultCh <- "Test"
 	})
 	if err := provider.FlushListCache("test"); err != nil {

@@ -1,0 +1,75 @@
+{{define "count_operation"}}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+
+// Count function for the specific list
+func (d *{{$entityStructName}}DAL) Count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
+	if d.configProvider.BlockedReads("{{$entityTableName}}") {
+		return 0, ErrOperationBlocked
+	}
+
+	const operation = "count_{{.List.Name | snakeCase}}"
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+	cacheKey := {{countCacheKey $entityTableName .List .Root.Columns}}
+	val, found := d.countCache.Get(cacheKey)
+	if found {
+		count, ok := val.(int64)
+		if !ok {
+			return 0, fmt.Errorf("{{$entityStructName}}DAL.Count{{.List.Name | pascalCase}}: Cache returned wrong type; expected int64")
+		}
+
+		dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return count, nil
+	}
+
+	// Otherwise, it's a cache miss or decode error
+	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+	// 2) Fallback to DB
+	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return d.count{{.List.Name | pascalCase}}(ctx, {{countQueryParams .List .Root.Columns}})
+	})
+
+	if err != nil {
+		// DB also failed
+		return 0, err
+	}
+
+	d.countCache.Set(cacheKey, count, time.Second*{{.Root.Caching.ListExpirationSeconds}})
+
+	return count.(int64), nil
+}
+
+func (d *{{$entityStructName}}DAL) count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
+	const operation = "count_{{.List.Name | snakeCase}}"
+	dbStart := time.Now()
+
+	// if startID is zero then query is different for pagination
+	query := `{{countQuery $entityStructName .List .Root.Columns}}`
+
+	db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName}}", false)
+	if dbErr != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return 0, dbErr
+	}
+
+	var err error
+	var count int64
+
+	row := db.QueryRowContext(ctx, query, {{countQueryParams .List .Root.Columns}})
+
+	err = row.Scan(
+		&count,
+	)
+
+	if err != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return 0, fmt.Errorf("failed to query {{$entityTableName}}s: %w", err)
+	}
+
+	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+	return count, nil
+}
+{{end}}

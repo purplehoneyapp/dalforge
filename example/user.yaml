@@ -5,7 +5,7 @@ columns:
     type: string
     allowNull: true
   uuid:
-    type: string
+    type: uuid
     unique: true
   email:
     type: string
@@ -26,8 +26,8 @@ operations:
   lists:
     - name: list_by_id
     - name: list_by_bday
-      where: birthdate = :birthdate
-      order: created
+      where: birthdate < :birthdate
+      order: birthdate
       desc: true
     - name: list_by_age
       where: age = :age

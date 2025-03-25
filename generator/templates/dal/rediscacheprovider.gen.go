@@ -153,7 +153,7 @@ func (p *RedisCacheProvider) OnCacheInvalidated(entityName string, handler func(
 	}
 }
 
-func (p *RedisCacheProvider) OnCacheFluhsList(entityName string, handler func()) {
+func (p *RedisCacheProvider) OnCacheFlushList(entityName string, handler func()) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exists := p.flushListHandlers[entityName]

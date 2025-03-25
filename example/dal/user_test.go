@@ -93,6 +93,9 @@ func TestMain(m *testing.M) {
 }
 
 func setupTestDB(t *testing.T) {
+	unregisterTelemetry()
+	registerTelemetry()
+
 	ctx := context.Background()
 	db, err := mainDbProvider.GetDatabase("", false)
 	if err != nil {
@@ -123,6 +126,7 @@ func setupTestDB(t *testing.T) {
 
 func teardownTestDB(t *testing.T) {
 	ctx := context.Background()
+	unregisterTelemetry()
 
 	// Extract host:port and database name
 	parts := strings.Split(dbProvider.connStr, "/")
@@ -238,6 +242,57 @@ func TestUserCRUD(t *testing.T) {
 		// Verify deletion
 		_, err = userDAL.GetByID(ctx, updated.ID)
 		assert.ErrorIs(t, err, ErrNotFound)
+	})
+}
+
+func TestUserCreateBulk(t *testing.T) {
+	t.Run("TestUserCreateBulk", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		// Initialize DAL
+		userDAL := NewUserDAL(
+			dbProvider,
+			nil, // cache provider (mock if needed)
+			nil, // config provider (mock if needed)
+			gobreaker.Settings{},
+		)
+
+		ctx := context.Background()
+
+		const numEntries = 50
+		var users []*User
+
+		for i := 1; i <= numEntries; i++ {
+			// Test Create
+			newUser := &User{
+				Age:       25,
+				Email:     fmt.Sprintf("test_%02d@example.com", i),
+				Uuid:      uuid.New().String(),
+				Status:    sql.NullString{String: "active", Valid: true},
+				Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			}
+			users = append(users, newUser)
+		}
+
+		users, err := userDAL.CreateBulk(ctx, users)
+		assert.NoError(t, err)
+		assert.Equal(t, numEntries, len(users))
+
+		// Assert that the create operation telemetry counter has increased.
+		createCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "create_bulk"))
+		assert.Equal(t, 1.0, createCounter, "Expected one create_bulk operation")
+
+		// assert we got all the IDs
+		for _, user := range users {
+			assert.Greater(t, user.ID, int64(0))
+		}
+
+		// --- Test GetByID ---
+		fetched, err := userDAL.GetByID(ctx, users[0].ID)
+		assert.NoError(t, err)
+		assert.Equal(t, users[0].ID, fetched.ID)
+		assert.Equal(t, "test_01@example.com", fetched.Email)
 	})
 }
 
@@ -390,9 +445,9 @@ func TestListById(t *testing.T) {
 
 		ctx := context.Background()
 
-		const numEntries = 1000
-		// lets create 1000 entries
-		for i := 1; i < numEntries; i++ {
+		const numEntries = 100
+		// lets create some entries
+		for i := 1; i <= numEntries; i++ {
 			// Test Create
 			newUser := &User{
 				Age:       25,
@@ -410,5 +465,222 @@ func TestListById(t *testing.T) {
 			createCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "create"))
 			assert.Equal(t, float64(i), createCounter, "Expected enough create operations")
 		}
+
+		// test count
+		count, err := userDAL.CountListById(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(numEntries), count)
+
+		// assert it is cached by running one more time.
+		count, err = userDAL.CountListById(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(numEntries), count)
+
+		countListByIDCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "count_list_by_id"))
+		assert.Equal(t, 2.0, countListByIDCounter, "Expected count_list_by_id counter to equal 2 after two calls")
+
+		countCacheHitCounter := testutil.ToFloat64(dalCacheHitsCounter.WithLabelValues("user", "count_list_by_id"))
+		assert.Equal(t, 1.0, countCacheHitCounter, "Expected one cache hit on count_list_by_id counter")
+
+		// Test ListById with pagination.
+		const pageSize = 10
+
+		// First page: startID = 0 should return the first page.
+		usersPage1, err := userDAL.ListById(ctx, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, usersPage1, pageSize, "Expected first page to have exactly %d entries", pageSize)
+		// Verify that the IDs are in ascending order.
+		for i := 1; i < len(usersPage1); i++ {
+			assert.True(t, usersPage1[i].ID > usersPage1[i-1].ID, "Expected IDs to be in ascending order")
+		}
+
+		// Next page: use the last ID from page1 as the starting point.
+		lastID := usersPage1[len(usersPage1)-1].ID
+		usersPage2, err := userDAL.ListById(ctx, lastID, pageSize)
+		assert.NoError(t, err)
+		// Expect page2 to have pageSize entries if there are enough users.
+		assert.Len(t, usersPage2, pageSize, "Expected second page to have exactly %d entries", pageSize)
+		// The first entry in page2 should have an ID greater than lastID.
+		assert.True(t, usersPage2[0].ID > lastID, "Expected first user ID in page2 to be greater than last ID from page1")
+
+		// Assert telemetry for ListById.
+		// Two separate ListById calls should have incremented the counter by 2.
+		listByIDCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "list_by_id"))
+		assert.Equal(t, 2.0, listByIDCounter, "Expected list_by_id counter to equal 2 after two calls")
+
+	})
+}
+
+func TestListByIdCachingAndInvalidation(t *testing.T) {
+	t.Run("TestListByIdCachingAndInvalidation", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		// Initialize the DAL with default providers (will use NoopCacheProvider and DefaultConfigProvider if nil).
+		userDAL := NewUserDAL(
+			dbProvider,
+			nil, // cache provider (default if nil)
+			nil, // config provider (default if nil)
+			gobreaker.Settings{},
+		)
+		ctx := context.Background()
+		const numEntries = 50
+		const pageSize = 10
+
+		// Insert a set of users.
+		for i := 1; i <= numEntries; i++ {
+			newUser := &User{
+				Age:       25,
+				Email:     fmt.Sprintf("cache_test_%d@example.com", i),
+				Uuid:      uuid.New().String(),
+				Status:    sql.NullString{String: "active", Valid: true},
+				Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			}
+			created, err := userDAL.Create(ctx, newUser)
+			assert.NoError(t, err)
+			assert.NotZero(t, created.ID)
+		}
+
+		// First call to ListById: this call should load data from the DB and set the cache.
+		usersPage1, err := userDAL.ListById(ctx, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, usersPage1, pageSize, "Expected first page to have %d entries", pageSize)
+
+		// Record cache hit and miss counters after first call.
+		hitsAfterFirst := testutil.ToFloat64(dalCacheHitsCounter.WithLabelValues("user", "list_by_id"))
+		missesAfterFirst := testutil.ToFloat64(dalCacheMissesCounter.WithLabelValues("user", "list_by_id"))
+
+		// Second call to ListById with the same parameters: should use the list cache and then individual item cache.
+		usersPage1Cached, err := userDAL.ListById(ctx, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, usersPage1Cached, pageSize, "Expected first page (cached) to have %d entries", pageSize)
+
+		// Get updated telemetry counters.
+		hitsAfterSecond := testutil.ToFloat64(dalCacheHitsCounter.WithLabelValues("user", "list_by_id"))
+		missesAfterSecond := testutil.ToFloat64(dalCacheMissesCounter.WithLabelValues("user", "list_by_id"))
+
+		// Expect that cache hits have increased on the second call.
+		assert.Greater(t, hitsAfterSecond, hitsAfterFirst, "Expected cache hits to increase on second call")
+		// Expect no new cache misses if items were found in cache.
+		assert.Equal(t, missesAfterFirst, missesAfterSecond, "Expected cache misses to remain the same on second call")
+
+		// Flush the list cache to simulate cache invalidation.
+		userDAL.FlushListCache()
+
+		// Third call to ListById: since list cache was flushed, the DAL should fall back to DB,
+		// leading to new cache misses for the list retrieval.
+		usersPage1AfterFlush, err := userDAL.ListById(ctx, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, usersPage1AfterFlush, pageSize, "Expected first page to have %d entries after cache flush", pageSize)
+
+		// After flush, cache misses should increase.
+		missesAfterFlush := testutil.ToFloat64(dalCacheMissesCounter.WithLabelValues("user", "list_by_id"))
+		assert.Greater(t, missesAfterFlush, missesAfterSecond, "Expected cache misses to increase after list cache flush")
+	})
+}
+
+func TestListByBday(t *testing.T) {
+	t.Run("TestListByBday", func(t *testing.T) {
+		// Set up a fresh test database.
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		// Initialize the DAL with default cache and config providers.
+		userDAL := NewUserDAL(
+			dbProvider,
+			nil, // cache provider (defaults to NoopCacheProvider if nil)
+			nil, // config provider (defaults to DefaultConfigProvider if nil)
+			gobreaker.Settings{},
+		)
+		ctx := context.Background()
+
+		// Insert 12 users, one per month in 1990.
+		for month := 1; month <= 12; month++ {
+			birthdate := time.Date(1990, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+			newUser := &User{
+				Age:       30,
+				Email:     fmt.Sprintf("user_%02d@example.com", month),
+				Uuid:      uuid.New().String(),
+				Status:    sql.NullString{String: "active", Valid: true},
+				Birthdate: sql.NullTime{Time: birthdate, Valid: true},
+			}
+			created, err := userDAL.Create(ctx, newUser)
+			assert.NoError(t, err)
+			assert.NotZero(t, created.ID)
+		}
+
+		// Test ListByBday for March 1, 1990.
+		bdayToTest := time.Date(1990, time.May, 1, 0, 0, 0, 0, time.UTC)
+		nullBday := sql.NullTime{Time: bdayToTest, Valid: true}
+		pageSize := 10
+
+		count, err := userDAL.CountListByBday(ctx, nullBday)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(4), count)
+
+		// First call: should load from DB and populate the cache.
+		results, err := userDAL.ListByBday(ctx, nullBday, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, results, 4, "Expected 4 users for birthdate %v", bdayToTest)
+		assert.Equal(t, "user_04@example.com", results[0].Email)
+
+		// Second call: should hit the cache.
+		resultsCached, err := userDAL.ListByBday(ctx, nullBday, 0, pageSize)
+		assert.NoError(t, err)
+		assert.Len(t, resultsCached, 4, "Expected 4 users from cache for birthdate %v", bdayToTest)
+		assert.Equal(t, "user_04@example.com", resultsCached[0].Email)
+
+		// Verify that the telemetry counter for "list_by_bday" has incremented by 2.
+		listByBdayCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "list_by_bday"))
+		assert.Equal(t, 2.0, listByBdayCounter, "Expected list_by_bday counter to equal 2 after two calls")
+	})
+}
+
+func TestOptimisticLocking(t *testing.T) {
+	t.Run("TestOptimisticLocking", func(t *testing.T) {
+		// Set up a fresh test database.
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		// Initialize DAL with default providers.
+		userDAL := NewUserDAL(
+			dbProvider,
+			nil, // default cache provider
+			nil, // default config provider
+			gobreaker.Settings{},
+		)
+		ctx := context.Background()
+
+		// Create a user.
+		newUser := &User{
+			Age:       25,
+			Email:     "optimistic@example.com",
+			Uuid:      uuid.New().String(),
+			Status:    sql.NullString{String: "active", Valid: true},
+			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+		}
+		created, err := userDAL.Create(ctx, newUser)
+		assert.NoError(t, err)
+		assert.NotZero(t, created.ID)
+
+		// Simulate an external update that bumps the version.
+		// We update the record directly so that the version in the database is incremented.
+		db, err := dbProvider.GetDatabase("user", true)
+		assert.NoError(t, err)
+		_, err = db.ExecContext(ctx, "UPDATE users SET version = version + 1 WHERE id = ?", created.ID)
+		assert.NoError(t, err)
+
+		// Now try to update the user using the stale version information from 'created'.
+		// Change a field.
+		created.Email = "updated@example.com"
+
+		// The update should use the stale version (e.g. X) while the DB has version (X+1), so no rows are affected.
+		err = userDAL.Update(ctx, created)
+		assert.ErrorIs(t, err, ErrNotFound, "Expected update to fail due to optimistic locking conflict")
+
+		// new version should be higher than created
+		retrieved, err := userDAL.GetByID(ctx, created.ID)
+		assert.NoError(t, err)
+		assert.Greater(t, retrieved.version, created.version)
 	})
 }

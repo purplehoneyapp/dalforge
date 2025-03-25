@@ -14,6 +14,7 @@ import (
     "encoding/gob"
     "database/sql"
     "errors"
+    "strings"
 
     "fmt"
     "time"
@@ -38,12 +39,13 @@ type {{$entityStructName}} struct {
 }
 
 type {{$entityStructName}}DAL struct {
-    dbProvider  DBProvider
-    cache       *cache.Cache  // Simple TTL cache for single items, for inmemory cache management
-  	listCache     *cache.Cache // Cache for lists. Simple TTL cache, for inmemory cache management
-    cacheProvider CacheProvider
-    configProvider ConfigProvider
-	dbBreaker   *gobreaker.CircuitBreaker
+    dbProvider          DBProvider
+    cache               *cache.Cache  // Simple TTL cache for single items, for inmemory cache management
+  	listCache           *cache.Cache // Cache for lists. Simple TTL cache, for inmemory cache management
+    countCache          *cache.Cache // Cache for counts. Simple TTL cache, for inmemory cache management
+    cacheProvider       CacheProvider
+    configProvider      ConfigProvider
+	dbBreaker           *gobreaker.CircuitBreaker
 }
 
 func New{{$entityStructName}}DAL(provider DBProvider, cacheProvider CacheProvider,
@@ -76,11 +78,13 @@ func New{{$entityStructName}}DAL(provider DBProvider, cacheProvider CacheProvide
     // Default expiration is 5 minutes and cleanup of 10 minutes
    	singleCache := cache.New(5*time.Minute, 10*time.Minute)
 	listCache := cache.New(5*time.Minute, 10*time.Minute)
+    countCache := cache.New(5*time.Minute, 10*time.Minute)
 
     newDAL := &{{$entityStructName}}DAL{
         dbProvider:     provider,
         cache:          singleCache,
         listCache:      listCache,
+        countCache:     countCache,
         cacheProvider:  cacheProvider,
         configProvider: configProvider,
 		dbBreaker:      gobreaker.NewCircuitBreaker(dbSettings),
@@ -101,6 +105,7 @@ func (d *{{$entityStructName}}DAL) getCacheKey(id int64) string {
 
 {{- if and .Operations .Operations.Store}}
 {{template "create" (dict "Root" $ "ColumnName" "id")}}
+{{template "create_bulk" (dict "Root" $ "ColumnName" "id")}}
 {{template "update" (dict "Root" $ "ColumnName" "id")}}
 {{template "store" (dict "Root" $ "ColumnName" "id")}}
 {{- end}}
@@ -121,6 +126,11 @@ func (d *{{$entityStructName}}DAL) getCacheKey(id int64) string {
 {{- if and .Operations .Operations.Lists }}
     {{- range .Operations.Lists }}
 {{template "list_operation" (dict "Root" $ "List" .)}}
+    {{- end }}
+{{- end }}
 
+{{- if and .Operations .Operations.Lists }}
+    {{- range .Operations.Lists }}
+{{template "count_operation" (dict "Root" $ "List" .)}}
     {{- end }}
 {{- end }}

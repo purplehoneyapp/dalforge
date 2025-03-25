@@ -1,0 +1,99 @@
+{{define "create_bulk"}}
+{{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+
+func (d *{{$entityStructName}}DAL) CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
+	if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+		return nil, ErrOperationBlocked
+	}
+
+	const operation = "create_bulk"
+	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+
+	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return d.createBulk(ctx, entities)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// All lists cache should be flushed.
+	d.FlushListCache()
+
+	return result.([]*{{$entityStructName}}), err
+}
+
+func (d *{{$entityStructName}}DAL) createBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
+	const operation = "create_bulk"
+	start := time.Now()
+
+	if len(entities) == 0 {
+		return nil, fmt.Errorf("empty entities list")
+	}
+
+	// Prepare data and parameters
+	valuePlaceholders := make([]string, 0, len(entities))
+	params := make([]interface{}, 0, len(entities)*7) // 7 fields per entity
+	now := time.Now()
+
+	for _, entity := range entities {
+		if entity.ID > 0 {
+			return nil, fmt.Errorf("entity with existing ID in bulk create")
+		}
+
+		entity.Created = now
+		entity.Updated = now
+
+		valuePlaceholders = append(valuePlaceholders, "({{- range $index, $colName := keys .Root.Columns -}}?,{{- end }}?,?)")
+		params = append(params,
+            {{- range $colName, $col := .Root.Columns}}entity.{{$colName | pascalCase}},{{- end}}
+            entity.Created,
+            entity.Updated,
+		)
+	}
+
+	query := fmt.Sprintf(`
+			INSERT INTO {{$entityTableName}}s
+			({{- template "comma_separated_columns" .Root.Columns}}created,updated)
+			VALUES %s
+		`, strings.Join(valuePlaceholders, ","))
+
+	db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName}}", true)
+	if dbErr != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return nil, dbErr
+	}
+
+	result, err := db.ExecContext(ctx, query, params...)
+	if err != nil {
+		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		return nil, fmt.Errorf("failed to bulk insert {{$entityTableName}}s: %w", err)
+	}
+
+	// Get generated IDs (works for MySQL/SQLite)
+	lastID, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last insert ID: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(entities)) {
+		return nil, fmt.Errorf("mismatch between inserted rows and entity count")
+	}
+
+	// Assign generated IDs sequentially
+	for i := range entities {
+		entities[i].ID = lastID + int64(i)
+	}
+
+	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+	return entities, nil
+}
+{{end}}

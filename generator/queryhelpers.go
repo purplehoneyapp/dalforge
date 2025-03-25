@@ -109,6 +109,18 @@ func listQuery(isStartIdZero bool, entityName string, list ListConfig, columns m
 	return result
 }
 
+func countQuery(entityName string, list ListConfig, columns map[string]Column) string {
+	result := ""
+	where := listWhereQuery(true, list)
+
+	result = fmt.Sprintf("SELECT count(*) FROM %ss", SnakeCaser(entityName))
+	if where != "" {
+		result += fmt.Sprintf(" WHERE %s", where)
+	}
+
+	return result
+}
+
 // Input: "email", { allowNulls: true, forceLowercase: true }
 // Output: strings.ToLower(email.String)
 //
@@ -166,6 +178,20 @@ func listQueryParams(isStartIdZero bool, list ListConfig, columns map[string]Col
 	return result
 }
 
+// Outputs string that is used for this:
+// rows, err := db.QueryContext(ctx, query, {{countQueryParams .List}})
+// should created something like this as output:
+// rows, err := db.QueryContext(ctx, query, age)
+func countQueryParams(list ListConfig, columns map[string]Column) string {
+	result := ""
+	params := extractParams(list.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+
+	return result
+}
+
 // for input:
 // func (d *UserDAL) listByAge(ctx context.Context, {{listFuncParams .List .Root.Columns}}) ([]*User, error) {
 // outputs:
@@ -185,6 +211,24 @@ func listFuncParams(list ListConfig, columns map[string]Column) (string, error) 
 	return result, nil
 }
 
+// for input:
+// func (d *UserDAL) countListByAge(ctx context.Context, {{listFuncParams .List .Root.Columns}}) (int64, error) {
+// outputs:
+// func (d *UserDAL) countListByAge(ctx context.Context, age int) (int64, error) {
+func countFuncParams(list ListConfig, columns map[string]Column) (string, error) {
+	result := ""
+	params := extractParams(list.Where)
+	for _, param := range params {
+		col, ok := columns[param]
+		if !ok {
+			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", param, list.Name)
+		}
+		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
+	}
+
+	return result, nil
+}
+
 // Create cache key similar to this:
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v:%d:%d", age, startID, pageSize)
 func listCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
@@ -197,5 +241,19 @@ func listCacheKey(entityName string, list ListConfig, columns map[string]Column)
 	key += ":%d:%d"
 
 	result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, listQueryParams(false, list, columns))
+	return result
+}
+
+// Create cache key similar to this:
+// fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v", age)
+func countCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
+	result := ""
+	key := fmt.Sprintf("%s_count_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
+	params := extractParams(list.Where)
+	for range params {
+		key += ":%v"
+	}
+
+	result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, countQueryParams(list, columns))
 	return result
 }

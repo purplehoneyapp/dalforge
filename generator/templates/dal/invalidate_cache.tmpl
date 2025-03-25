@@ -14,6 +14,7 @@ func (d *{{$entityStructName}}DAL) InvalidateCache(entity *{{$entityStructName}}
 func (d *{{$entityStructName}}DAL) FlushListCache() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
+    d.countCache.Flush()
 
     // Invalidate cache entry across instances
     d.cacheProvider.FlushListCache("{{$entityTableName}}")
@@ -30,6 +31,7 @@ func (d *{{$entityStructName}}DAL) onCacheInvalidated(key string) {
 func (d *{{$entityStructName}}DAL) onCacheFlushList() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
+    d.countCache.Flush()
     {{- end }}
 }
 
