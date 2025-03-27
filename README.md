@@ -108,7 +108,7 @@ DALForge uses these definitions to generate Go files (e.g. user.gen.go) that imp
 DALForge comes with sensible defaults. You can customize various aspects:
 
 **Configuration for MYSQL:**
-To define MYSQL servers check this configuration file: [serverprovider.yaml](examples/dal/serverprovider.yaml)
+To define MYSQL servers check this configuration file: [serverprovider.yaml](example/dal/serverprovider.yaml)
 
 **Caching:**
 Generated code supports in-memory caching and optional Redis-based cache invalidation. Adjust connection settings in the generated files if needed.
