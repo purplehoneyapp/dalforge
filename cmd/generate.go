@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"dalcreator/generator"
+	"dalforge/generator"
 	"fmt"
 	"log"
 	"os"

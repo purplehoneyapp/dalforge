@@ -1,18 +1,19 @@
 package cmd
 
 import (
+	"dalforge/version"
 	"fmt"
-	"dalcreator/version"
+
 	"github.com/spf13/cobra"
 )
 
-// versionCmd prints the current version of dalcreator.
+// versionCmd prints the current version of dalforge.
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version number of dalcreator",
-	Long:  `All software has versions. This is dalcreator's.`,
+	Short: "Print the version number of dalforge",
+	Long:  `All software has versions. This is dalforge's.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("dalcreator %v\n", version.Version)
+		fmt.Printf("dalforge %v\n", version.Version)
 	},
 }
 

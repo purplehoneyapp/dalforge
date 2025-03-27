@@ -1,7 +1,7 @@
 package main
 
 import (
-	"dalcreator/cmd"
+	"dalforge/cmd"
 )
 
 func main() {

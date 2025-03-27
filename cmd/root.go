@@ -8,9 +8,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
-	Use:   "dalcreator",
+	Use:   "dalforge",
 	Short: "A CLI tool for generating .go and .sql files from YAML definitions",
-	Long: `dalcreator is a command-line interface for scanning a directory
+	Long: `dalforge is a command-line interface for scanning a directory
 containing YAML files and generating corresponding .go and .sql files
 in a specified output directory.`,
 	// No default run action here—subcommands will handle the logic.
