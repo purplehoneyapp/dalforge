@@ -40,8 +40,8 @@ DALForge is a command-line tool that generates your DAL code based on YAML confi
 dalforge generate <inputdir> <outputdir>
 ```
 
-<inputdir>: Directory containing your YAML files.
-<outputdir>: Directory where the generated DAL code will be written.
+inputdir: Directory containing your YAML files.
+outputdir: Directory where the generated DAL code will be written.
 
 ## Example
 Suppose you have a folder ./config with your YAML files and you want to generate the DAL code in the folder ./dal. Run:
@@ -53,29 +53,55 @@ dalforge generate ./dalconfig ./dal
 YAML Configuration
 Each YAML file defines an entity and its fields. For example:
 
-yaml
-Copy
-# user.yaml
-entity: user
-fields:
-  id:
-    type: int64
-    primary: true
-  age:
-    type: int8
-    allowNull: false
+```yaml
+name: user  # entity name, should be singular, snake cased.
+version: v1
+columns:
+  status:
+    type: string # supported types are: int8, int32, int64, bool, string, float, date, time, datetime, uuid
+    allowNull: true
+  uuid:
+    type: uuid
+    unique: true
   email:
     type: string
+    allowNull: false
     unique: true
   birthdate:
     type: date
-  created:
-    type: timestamp
-    default: CURRENT_TIMESTAMP
-  updated:
-    type: timestamp
-    default: CURRENT_TIMESTAMP
-    onUpdate: CURRENT_TIMESTAMP
+    allowNull: true
+  age:
+    type: int8
+operations:
+  store: true   # if true will generate proper write functions
+  delete: true  # if true it will generate delete functions
+  gets:
+    - email   # put a column name here; it will generate GetByEmail function. The intention is that those columns are unique values.
+    - uuid
+  lists:
+    - name: list_by_id                 # name of a function that will fetch multiple rows with pagination supported. This should be snake cased and have a name that sounds like multiple results are expected.
+    - name: list_by_bday
+      where: birthdate < :birthdate    # you can use named parameters. This will create a ListByBDay(ctx, birthdate time.Time, startId int64, pageSize int) function
+      order: birthdate
+      desc: true
+    - name: list_by_age
+      where: age = :age
+      order: created
+     # desc: true   # default is false
+    - name: list_by_status
+      where: status = :status
+      order: created
+circuitbreaker:
+  timeoutSeconds: 20             # how long to wait while in open state before trying to go to half open state.
+  consecutiveFailures: 4         # how many times to fail in an closed state before we swithc to open state
+caching:
+  type: redis # Potential values could be: none, redis. If none that no cache invalidation across multiple instances would happen. Most likely you would have redis here.
+  singleExpirationSeconds: 300  # timeout for local cache for single rows
+  listExpirationSeconds: 60     # timeout for local cache for multiple rows aka list functions
+  listInvalidation: flush       # potential values could be: expire, flush (default is flush); expire means list cache will only expire. flush means that on any change of data list cache will be flushed.
+  maxItemsCount: 100000         # max number of items in cache
+```
+
 DALForge uses these definitions to generate Go files (e.g. user.gen.go) that implement a complete DAL layer with caching, telemetry, and error handling.
 
 ## Configuration & Customization
@@ -88,49 +114,22 @@ Circuit Breaker:
 Uses gobreaker with default thresholds that you can tune in the generated code.
 
 Telemetry:
-Metrics are collected via Prometheus. You can customize which metrics are exposed or how they’re reset between test runs.
+Metrics are collected via Prometheus.
 
 ## Testing
 DALForge is fully tested. To run tests, execute:
 
-sh
-Copy
+```sh
 go test ./...
+```
+
+Generated code is tested in this repository so there is no really need to add unit tests to the generated DAL layer code in your real repositories.
+
 Note:
 Global Prometheus counters are shared across tests. Use the provided telemetry reset functions (unregisterTelemetry() and registerTelemetry()) in your test setup if you require isolated metric state.
 
 ## Examples
-Generating a DAL for a User Entity
-Create a YAML file (e.g., user.yaml) in your configuration directory (./config):
-
-yaml
-Copy
-entity: user
-fields:
-  id:
-    type: int64
-    primary: true
-  age:
-    type: int8
-    allowNull: false
-  email:
-    type: string
-    unique: true
-  birthdate:
-    type: date
-  created:
-    type: timestamp
-    default: CURRENT_TIMESTAMP
-  updated:
-    type: timestamp
-    default: CURRENT_TIMESTAMP
-    onUpdate: CURRENT_TIMESTAMP
-Run DALForge to generate the DAL code:
-
-sh
-Copy
-dalforge generate ./config ./dal
-The generated code in ./dal will include a file (e.g., user.gen.go) implementing a DAL layer for the user entity with full CRUD, caching, telemetry, and error handling.
+Check examples directory for yaml example and generated code examples.
 
 ## Contributing
 Contributions are welcome! Please fork the repository, commit your changes, and open a pull request. For major changes, open an issue first to discuss your ideas.
