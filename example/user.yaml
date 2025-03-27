@@ -1,8 +1,8 @@
-name: user
+name: user  # entity name, should be singular, snake cased.
 version: v1
 columns:
   status:
-    type: string
+    type: string # supported types are: int8, int32, int64, bool, string, float, date, time, datetime, uuid
     allowNull: true
   uuid:
     type: uuid
@@ -16,17 +16,16 @@ columns:
     allowNull: true
   age:
     type: int8
-
 operations:
-  store: true
-  delete: true
+  store: true   # if true will generate proper write functions
+  delete: true  # if true it will generate delete functions
   gets:
-    - email
+    - email   # put a column name here; it will generate GetByEmail function. The intention is that those columns are unique values.
     - uuid
   lists:
-    - name: list_by_id
+    - name: list_by_id                 # name of a function that will fetch multiple rows with pagination supported. This should be snake cased and have a name that sounds like multiple results are expected.
     - name: list_by_bday
-      where: birthdate < :birthdate
+      where: birthdate < :birthdate    # you can use named parameters. This will create a ListByBDay(ctx, birthdate time.Time, startId int64, pageSize int) function
       order: birthdate
       desc: true
     - name: list_by_age
@@ -37,12 +36,11 @@ operations:
       where: status = :status
       order: created
 circuitbreaker:
-  timeoutSeconds: 20 # how long to wait while in open state before trying to go to half open state.
-  consecutiveFailures: 4 # how many times to fail in an closed state before we swithc to open state
+  timeoutSeconds: 20             # how long to wait while in open state before trying to go to half open state.
+  consecutiveFailures: 4         # how many times to fail in an closed state before we swithc to open state
 caching:
-  type: redis # Potential values could be: none, redis
-  singleExpirationSeconds: 300
-  listExpirationSeconds: 60
-  listInvalidation: flush # potential values could be: expire, flush (default is flush)
-  maxItemsCount: 100000 # max number of items in cache
-
+  type: redis # Potential values could be: none, redis. If none that no cache invalidation across multiple instances would happen. Most likely you would have redis here.
+  singleExpirationSeconds: 300  # timeout for local cache for single rows
+  listExpirationSeconds: 60     # timeout for local cache for multiple rows aka list functions
+  listInvalidation: flush       # potential values could be: expire, flush (default is flush); expire means list cache will only expire. flush means that on any change of data list cache will be flushed.
+  maxItemsCount: 100000         # max number of items in cache
