@@ -107,13 +107,16 @@ DALForge uses these definitions to generate Go files (e.g. user.gen.go) that imp
 ## Configuration & Customization
 DALForge comes with sensible defaults. You can customize various aspects:
 
-Caching:
+**Configuration for MYSQL:**
+To define MYSQL servers check this configuration file: [serverprovider.yaml](examples/dal/serverprovider.yaml)
+
+**Caching:**
 Generated code supports in-memory caching and optional Redis-based cache invalidation. Adjust connection settings in the generated files if needed.
 
-Circuit Breaker:
+**Circuit Breaker:**
 Uses gobreaker with default thresholds that you can tune in the generated code.
 
-Telemetry:
+**Telemetry:**
 Metrics are collected via Prometheus.
 
 ## Testing
