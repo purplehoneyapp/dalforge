@@ -254,6 +254,11 @@ func countCacheKey(entityName string, list ListConfig, columns map[string]Column
 		key += ":%v"
 	}
 
-	result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, countQueryParams(list, columns))
+	queryParams := countQueryParams(list, columns)
+	if queryParams == "" {
+		result = fmt.Sprintf(`fmt.Sprintf("%s")`, key)
+	} else {
+		result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, queryParams)
+	}
 	return result
 }

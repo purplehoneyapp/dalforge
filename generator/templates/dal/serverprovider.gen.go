@@ -25,8 +25,7 @@ type DBProvider interface {
 
 // ServerProvider is an implementation of DBProvider.
 type ServerProvider struct {
-	configFile string
-	config     *serverConfig
+	config *serverConfig
 	// groups stores references to each server group keyed by the group name.
 	groups map[string]*dbGroup
 }
@@ -63,28 +62,23 @@ type dbInstance struct {
 }
 
 // NewServerProvider creates a new ServerProvider given a path to the YAML config.
-func NewServerProvider(configFile string) *ServerProvider {
-	return &ServerProvider{
-		configFile: configFile,
-		groups:     make(map[string]*dbGroup),
+func NewServerProvider(configurationYaml string) (*ServerProvider, error) {
+	// Expand environment variables like ${USER_DB_PASS}
+	expandedData := os.ExpandEnv(string(configurationYaml))
+
+	var cfg serverConfig
+	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
+
+	return &ServerProvider{
+		config: &cfg,
+		groups: make(map[string]*dbGroup),
+	}, nil
 }
 
 // Connect reads the YAML file, parses it, expands environment variables, and connects to all DBs.
 func (s *ServerProvider) Connect() error {
-	data, err := os.ReadFile(s.configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Expand environment variables like ${USER_DB_PASS}
-	expandedData := os.ExpandEnv(string(data))
-
-	var cfg serverConfig
-	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal YAML: %w", err)
-	}
-	s.config = &cfg
 
 	// Create DB connections for each server group
 	for _, group := range s.config.ServerGroup {

@@ -57,6 +57,11 @@ func generate(cmd *cobra.Command, args []string) {
 			fileName := entry.Name()
 			baseName := strings.TrimSuffix(fileName, ".yaml")
 
+			// skip serverprovider files as those are not entity files.
+			if strings.Contains(baseName, "serverprovider") {
+				continue
+			}
+
 			inputFile := filepath.Join(inputDir, entry.Name())
 			goPath := filepath.Join(outputDir, baseName+".gen.go")
 			sqlPath := filepath.Join(outputDir, baseName+".sql")

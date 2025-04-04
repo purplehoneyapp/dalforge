@@ -48,8 +48,7 @@ func (g *Generator) CopyOtherFiles(outputDir string) error {
 			return nil
 		}
 
-		// 4) If the file is "serverprovider.yaml", skip if it already exists
-		if d.Name() == "serverprovider.yaml" {
+		if getFileNameWithoutExt(d.Name()) == "serverprovider" {
 			if _, statErr := os.Stat(outPath); statErr == nil {
 				// The file exists, so do not overwrite
 				return nil
@@ -88,4 +87,11 @@ func (g *Generator) CopyOtherFiles(outputDir string) error {
 	}
 
 	return nil
+}
+
+func getFileNameWithoutExt(filePath string) string {
+	filename := filepath.Base(filePath)       // Get "report.txt"
+	ext := filepath.Ext(filename)             // Get ".txt"
+	name := filename[:len(filename)-len(ext)] // Remove extension
+	return name
 }
