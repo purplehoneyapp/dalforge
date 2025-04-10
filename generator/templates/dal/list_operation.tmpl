@@ -126,6 +126,7 @@ func (d *{{$entityStructName}}DAL) {{.List.Name | camelCase}}(ctx context.Contex
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
+    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
     dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
 	return entities, nil
 }

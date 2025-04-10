@@ -64,6 +64,7 @@ func (d *{{$entityStructName}}DAL) delete(ctx context.Context, id int64) error {
 		return ErrNotFound
 	}
 
+	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
 	return nil
 }

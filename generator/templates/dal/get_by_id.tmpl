@@ -109,6 +109,7 @@ func (d *{{$entityStructName}}DAL) getByID(ctx context.Context, id int64) (*{{$e
         return nil, fmt.Errorf("failed to get {{$entityStructName}} by ID: %w", err)
     }
 
+    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
     dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
     return &entity, nil
 }

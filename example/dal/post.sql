@@ -12,6 +12,6 @@ CREATE TABLE posts (
 
 # Indexes that serve all the list operations
 CREATE INDEX idx_deleted ON posts (deleted);
-CREATE INDEX idx_created ON posts (created);
 CREATE INDEX idx_target_age ON posts (target_age);
+CREATE INDEX idx_created ON posts (created);
 

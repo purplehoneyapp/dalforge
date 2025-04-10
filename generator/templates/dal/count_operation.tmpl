@@ -69,6 +69,7 @@ func (d *{{$entityStructName}}DAL) count{{.List.Name | pascalCase}}(ctx context.
 		return 0, fmt.Errorf("failed to query {{$entityTableName}}s: %w", err)
 	}
 
+	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
 	return count, nil
 }

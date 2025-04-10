@@ -16,6 +16,9 @@ type DBProvider interface {
 	// GetDatabase returns a *sql.DB given an entityName, a flag indicating if it’s a write operation,
 	GetDatabase(entityName string, isWriteOperation bool) (*sql.DB, error)
 
+	// mode is: "read", "write" or "all"
+	AllDatabases(entityName string, mode string) []*sql.DB
+
 	// Connect connects to all databases defined in the YAML configuration.
 	Connect() error
 
@@ -25,8 +28,7 @@ type DBProvider interface {
 
 // ServerProvider is an implementation of DBProvider.
 type ServerProvider struct {
-	configFile string
-	config     *serverConfig
+	config *serverConfig
 	// groups stores references to each server group keyed by the group name.
 	groups map[string]*dbGroup
 }
@@ -63,28 +65,23 @@ type dbInstance struct {
 }
 
 // NewServerProvider creates a new ServerProvider given a path to the YAML config.
-func NewServerProvider(configFile string) *ServerProvider {
-	return &ServerProvider{
-		configFile: configFile,
-		groups:     make(map[string]*dbGroup),
+func NewServerProvider(configurationYaml string) (*ServerProvider, error) {
+	// Expand environment variables like ${USER_DB_PASS}
+	expandedData := os.ExpandEnv(string(configurationYaml))
+
+	var cfg serverConfig
+	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
+
+	return &ServerProvider{
+		config: &cfg,
+		groups: make(map[string]*dbGroup),
+	}, nil
 }
 
 // Connect reads the YAML file, parses it, expands environment variables, and connects to all DBs.
 func (s *ServerProvider) Connect() error {
-	data, err := os.ReadFile(s.configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	// Expand environment variables like ${USER_DB_PASS}
-	expandedData := os.ExpandEnv(string(data))
-
-	var cfg serverConfig
-	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal YAML: %w", err)
-	}
-	s.config = &cfg
 
 	// Create DB connections for each server group
 	for _, group := range s.config.ServerGroup {
@@ -153,6 +150,42 @@ func (s *ServerProvider) Disconnect() error {
 		}
 	}
 	return nil
+}
+
+// AllDatabases returns all sql.DB connections associated with the given entity.
+// Optional mode: "read", "write", or "all" (default).
+func (s *ServerProvider) AllDatabases(entityName string, mode string) []*sql.DB {
+	// Determine the connection mode filter
+	connectionMode := mode
+
+	var result []*sql.DB
+
+	// Assuming you have access to your dbGroups (you might need to pass them as a parameter)
+	for _, group := range s.groups { // Replace with your actual dbGroups access
+		if contains(group.entities, entityName) {
+			switch connectionMode {
+			case "read":
+				result = append(result, group.reads...)
+			case "write":
+				result = append(result, group.writes...)
+			default: // "all"
+				result = append(result, group.reads...)
+				result = append(result, group.writes...)
+			}
+		}
+	}
+
+	return result
+}
+
+// Helper function to check if a string exists in a slice
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // GetDatabase looks up the server group for the given entityName, then picks a read or write DB.

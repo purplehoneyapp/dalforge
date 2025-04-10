@@ -67,6 +67,7 @@ func (d *{{$entityStructName}}DAL) create(ctx context.Context, entity *{{$entity
 	}
 
 	entity.ID = id
+	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
 	return entity, nil
 }

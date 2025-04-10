@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	log "github.com/sirupsen/logrus"
 )
 
 // RedisCacheProvider implements CacheProvider using Redis Pub/Sub.
@@ -36,7 +36,7 @@ func NewRedisCacheProvider(addr, password string, db int) *RedisCacheProvider {
 			Password: password,
 			DB:       db,
 			OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-				log.Printf("Connected to redis: [%s]", addr)
+				log.Infof("Connected to redis: [%s]", addr)
 				return nil
 			},
 		},
@@ -63,7 +63,7 @@ func (p *RedisCacheProvider) Connect() error {
 			return nil
 		}
 
-		log.Printf("Redis connection failed: %v. Retrying in %v...\n", err, backoff)
+		log.Errorf("Redis connection failed: %v. Retrying in %v...\n", err, backoff)
 		time.Sleep(backoff)
 		backoff = time.Duration(float64(backoff) * 1.5)
 		if backoff > maxBackoff {
@@ -72,7 +72,7 @@ func (p *RedisCacheProvider) Connect() error {
 	}
 
 	cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
-	log.Println("Redis connection permanently failed. Cache invalidation may be unreliable.")
+	log.Warnln("Redis connection permanently failed. Cache invalidation may be unreliable.")
 	return fmt.Errorf("failed to connect to Redis after %d retries: %w", maxRetries, err)
 }
 
@@ -94,16 +94,16 @@ func (p *RedisCacheProvider) InvalidateCache(entityName, cacheKey string) error 
 			err := p.client.Publish(p.ctx, channel, message).Err()
 			if err == nil {
 				cachePublishedMessages.WithLabelValues(p.options.Addr).Inc()
-				log.Printf("Published cache invalidation: %s -> %s\n", entityName, cacheKey)
+				log.Debugf("Published cache invalidation: %s -> %s\n", entityName, cacheKey)
 				return
 			}
 
-			log.Printf("Failed to publish cache invalidation: %s -> %s. Retrying in %v...\n", entityName, cacheKey, delay)
+			log.Errorf("Failed to publish cache invalidation: %s -> %s. Retrying in %v...\n", entityName, cacheKey, delay)
 			time.Sleep(delay)
 		}
 
 		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
-		log.Printf("Failed to publish cache invalidation: %s -> %s after %d retries\n", entityName, cacheKey, maxRetries)
+		log.Errorf("Failed to publish cache invalidation: %s -> %s after %d retries\n", entityName, cacheKey, maxRetries)
 	}()
 	return nil // Return immediately.
 }
@@ -126,16 +126,16 @@ func (p *RedisCacheProvider) FlushListCache(entityName string) error {
 			err := p.client.Publish(p.ctx, channel, message).Err()
 			if err == nil {
 				cachePublishedMessages.WithLabelValues(p.options.Addr).Inc()
-				log.Printf("Published cache_flush_list: %s \n", entityName)
+				log.Debugf("Published cache_flush_list: %s \n", entityName)
 				return
 			}
 
-			log.Printf("Failed to publish cache_flush_list: %s. Retrying in %v...\n", entityName, delay)
+			log.Errorf("Failed to publish cache_flush_list: %s. Retrying in %v...\n", entityName, delay)
 			time.Sleep(delay)
 		}
 
 		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
-		log.Printf("Failed to publish cache_flush_list: %s after %d retries\n", entityName, maxRetries)
+		log.Errorf("Failed to publish cache_flush_list: %s after %d retries\n", entityName, maxRetries)
 	}()
 	return nil // Return immediately.
 }
@@ -172,9 +172,9 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Printf("Listening for cache invalidation messages for %s\n", entityName)
+	log.Infof("Listening for cache invalidation messages for %s\n", entityName)
 	for msg := range pubsub.Channel() {
-		log.Printf("Got cache invalidation message for %s\n", entityName)
+		log.Debugf("Got cache invalidation message for %s\n", entityName)
 		// Extract entity name from the channel name.
 		p.mu.RLock()
 		handler, exists := p.handlers[entityName]
@@ -183,7 +183,7 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 			handler(msg.Payload)
 			cacheReceivedMessages.WithLabelValues(p.options.Addr).Inc()
 		} else {
-			log.Printf("No handler registered for entity: %s\n", entityName)
+			log.Warnf("No handler registered for entity: %s\n", entityName)
 		}
 	}
 }
@@ -195,9 +195,9 @@ func (p *RedisCacheProvider) listenForFlushList(entityName string) {
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Printf("Listening for cache_flush_list messages for %s\n", entityName)
+	log.Infof("Listening for cache_flush_list messages for %s\n", entityName)
 	for range pubsub.Channel() {
-		log.Printf("Got cache_flush_list message for %s\n", entityName)
+		log.Debugf("Got cache_flush_list message for %s\n", entityName)
 		// Extract entity name from the channel name.
 		p.mu.RLock()
 		handler, exists := p.flushListHandlers[entityName]
@@ -206,7 +206,7 @@ func (p *RedisCacheProvider) listenForFlushList(entityName string) {
 			handler()
 			cacheReceivedMessages.WithLabelValues(p.options.Addr).Inc()
 		} else {
-			log.Printf("No cache_flush_list handler registered for entity: %s\n", entityName)
+			log.Warnf("No cache_flush_list handler registered for entity: %s\n", entityName)
 		}
 	}
 }
@@ -219,7 +219,7 @@ func (p *RedisCacheProvider) Close() {
 	if p.isClosed {
 		return
 	}
-	log.Println("Closing RedisCacheProvider...")
+	log.Infoln("Closing RedisCacheProvider...")
 	p.cancel()
 	if p.client != nil {
 		_ = p.client.Close()

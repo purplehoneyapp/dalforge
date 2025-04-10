@@ -127,12 +127,8 @@ func OnCircuitBreakerStateChange(name string, from gobreaker.State, to gobreaker
 	}
 }
 
-var initialized bool = false
-
-func registerTelemetry() {
-	//create a registry
-	HealthRegistry = prometheus.NewRegistry()
-	HealthRegistry.MustRegister(dalOperationsTotalCounter,
+func RegisterTelemetry(registerer prometheus.Registerer) {
+	registerer.MustRegister(dalOperationsTotalCounter,
 		dbRequestsCounter,
 		dbRequestsErrorsCounter,
 		dbRequestsLatencyHistogram,
@@ -149,8 +145,8 @@ func registerTelemetry() {
 		cacheErrorCounter)
 }
 
-// Removes all telemetry collectors registered
-func unregisterTelemetry() {
+// Resets all vectors in all metrics
+func ResetTelemetry() {
 	dalOperationsTotalCounter.Reset()
 	dbRequestsCounter.Reset()
 	dbRequestsErrorsCounter.Reset()
@@ -166,12 +162,4 @@ func unregisterTelemetry() {
 	cachePublishedMessages.Reset()
 	cacheReceivedMessages.Reset()
 	cacheErrorCounter.Reset()
-	HealthRegistry = prometheus.NewRegistry()
-}
-
-func init() {
-	if !initialized {
-		initialized = true
-		registerTelemetry()
-	}
 }

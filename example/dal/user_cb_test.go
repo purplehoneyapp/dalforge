@@ -17,6 +17,9 @@ type FailingDBProvider struct{}
 func (p FailingDBProvider) GetDatabase(_ string, _ bool) (*sql.DB, error) {
 	return nil, fmt.Errorf("simulated DB failure")
 }
+func (p FailingDBProvider) AllDatabases(_ string, _ string) []*sql.DB {
+	return nil
+}
 func (p FailingDBProvider) Connect() error    { return nil }
 func (p FailingDBProvider) Disconnect() error { return nil }
 

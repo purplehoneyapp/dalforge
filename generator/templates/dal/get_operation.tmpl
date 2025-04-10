@@ -82,6 +82,7 @@ func (d *{{$entityStructName}}DAL) getBy{{.ColumnName | pascalCase}}(ctx context
         return nil, fmt.Errorf("failed to get {{$entityStructName}} by {{.ColumnName | pascalCase}}: %w", err)
     }
 
+    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
     dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
     return &entity, nil
 }

@@ -93,6 +93,7 @@ func (d *{{$entityStructName}}DAL) createBulk(ctx context.Context, entities []*{
 		entities[i].ID = lastID + int64(i)
 	}
 
+	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
 	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
 	return entities, nil
 }

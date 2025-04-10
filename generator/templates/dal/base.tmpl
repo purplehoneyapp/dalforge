@@ -13,6 +13,7 @@ import (
     "context"
     "encoding/gob"
     "database/sql"
+    _ "embed"
     "errors"
     "strings"
 
@@ -102,6 +103,8 @@ func (d *{{$entityStructName}}DAL) getCacheKey(id int64) string {
 }
 
 {{template "invalidate_cache" (dict "Root" $ "ColumnName" "id")}}
+
+{{template "create_table" (dict "Root" $ "ColumnName" "id")}}
 
 {{- if and .Operations .Operations.Store}}
 {{template "create" (dict "Root" $ "ColumnName" "id")}}

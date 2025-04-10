@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sony/gobreaker"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,9 @@ type TestDBProvider struct {
 
 func (p *TestDBProvider) GetDatabase(_ string, _ bool) (*sql.DB, error) {
 	return p.connection, nil
+}
+func (p *TestDBProvider) AllDatabases(_ string, _ string) []*sql.DB {
+	return nil
 }
 func (p *TestDBProvider) Connect() error {
 	conn, err := sql.Open("mysql", p.connStr)
@@ -93,8 +97,9 @@ func TestMain(m *testing.M) {
 }
 
 func setupTestDB(t *testing.T) {
-	unregisterTelemetry()
-	registerTelemetry()
+	ResetTelemetry()
+	registry := prometheus.NewRegistry()
+	RegisterTelemetry(registry)
 
 	ctx := context.Background()
 	db, err := mainDbProvider.GetDatabase("", false)
@@ -126,7 +131,7 @@ func setupTestDB(t *testing.T) {
 
 func teardownTestDB(t *testing.T) {
 	ctx := context.Background()
-	unregisterTelemetry()
+	ResetTelemetry()
 
 	// Extract host:port and database name
 	parts := strings.Split(dbProvider.connStr, "/")
