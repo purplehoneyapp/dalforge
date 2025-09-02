@@ -2,13 +2,13 @@ name: user  # entity name, should be singular, snake cased.
 version: v1
 columns:
   status:
-    type: string # supported types are: int8, int32, int64, bool, string, float, date, time, datetime, uuid
+    type: varchar # supported types are: int8, int32, int64, bool, varchar, text, float, date, time, datetime, uuid
     allowNull: true
   uuid:
     type: uuid
     unique: true
   email:
-    type: string
+    type: varchar
     allowNull: false
     unique: true
   birthdate:

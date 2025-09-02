@@ -94,7 +94,12 @@ func toGoType(yamlType string, allowNull bool) string {
 			return "sql.NullString"
 		}
 		return "string"
-	case "string":
+	case "varchar":
+		if allowNull {
+			return "sql.NullString"
+		}
+		return "string"
+	case "text":
 		if allowNull {
 			return "sql.NullString"
 		}
@@ -124,8 +129,10 @@ func toSQLType(yamlType string) string {
 		return "BIGINT"
 	case "float":
 		return "DOUBLE"
-	case "string":
+	case "varchar":
 		return "VARCHAR(255)" // Default length for strings
+	case "text":
+		return "text" // Default length for strings
 	case "bool":
 		return "BOOLEAN"
 	case "date":

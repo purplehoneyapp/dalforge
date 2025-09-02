@@ -4,7 +4,7 @@ columns:
   target_age:
     type: int8
   post:
-    type: string
+    type: text
   deleted:
     type: bool
 operations:

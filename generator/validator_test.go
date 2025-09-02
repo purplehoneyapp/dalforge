@@ -11,7 +11,7 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 		Version: "v1",   // non-empty and valid format
 		Columns: map[string]Column{
 			"id":      {Type: "int64", AllowNull: false, Unique: true},
-			"email":   {Type: "string", AllowNull: false, Unique: true},
+			"email":   {Type: "varchar", AllowNull: false, Unique: true},
 			"created": {Type: "datetime", AllowNull: false, Unique: false},
 			"updated": {Type: "datetime", AllowNull: false, Unique: false},
 		},
@@ -53,8 +53,8 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		Version: "",     // empty version (error)
 		Columns: map[string]Column{
 			"id":        {Type: "int64", AllowNull: false, Unique: true},
-			"email":     {Type: "string", AllowNull: false, Unique: false},  // error: used in gets but not unique
-			"firstName": {Type: "string", AllowNull: false, Unique: false},  // error: not snake_case
+			"email":     {Type: "varchar", AllowNull: false, Unique: false}, // error: used in gets but not unique
+			"firstName": {Type: "varchar", AllowNull: false, Unique: false}, // error: not snake_case
 			"invalid":   {Type: "unknown", AllowNull: false, Unique: false}, // error: unsupported type
 		},
 		Operations: OperationConfig{
