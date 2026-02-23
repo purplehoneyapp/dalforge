@@ -48,7 +48,7 @@ func (g *Generator) CopyOtherFiles(outputDir string) error {
 			return nil
 		}
 
-		if getFileNameWithoutExt(d.Name()) == "serverprovider" {
+		if getFileNameWithoutExt(d.Name()) == "serverprovider" || getFileNameWithoutExt(d.Name()) == "db_config.example" {
 			if _, statErr := os.Stat(outPath); statErr == nil {
 				// The file exists, so do not overwrite
 				return nil

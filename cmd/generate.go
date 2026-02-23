@@ -57,8 +57,8 @@ func generate(cmd *cobra.Command, args []string) {
 			fileName := entry.Name()
 			baseName := strings.TrimSuffix(fileName, ".yaml")
 
-			// skip serverprovider files as those are not entity files.
-			if strings.Contains(baseName, "serverprovider") {
+			// skip serverprovider and db_config.example files as those are not entity files.
+			if strings.Contains(baseName, "serverprovider") || strings.Contains(baseName, "db_config") {
 				continue
 			}
 
