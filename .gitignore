@@ -47,3 +47,5 @@ Thumbs.db
 # Ignore local development configuration files
 config.local.*
 dalforge
+dalforge-context.md
+dalforge-project-tree.md
