@@ -41,7 +41,7 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
         return nil, dbErr
     }
 
-    now := time.Now()
+    now := time.Now().Truncate(time.Second)
     batchSize := 500 // Safe limit to prevent exceeding MySQL's max placeholders
 
     // Process entities in chunks
@@ -106,6 +106,7 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
         // Assign generated IDs sequentially to the current chunk
         for j := range chunk {
             chunk[j].ID = lastID + int64(j)
+			d.setCached(chunk[j])
         }
     }
 

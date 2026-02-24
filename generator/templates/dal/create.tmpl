@@ -35,8 +35,9 @@ func (d *{{$entityArgumentName}}Repository) create(ctx context.Context, entity *
 	const operation = "create"
 	start := time.Now()
 
-	entity.Created = time.Now()
-	entity.Updated = time.Now()
+	now := time.Now().Truncate(time.Second)
+	entity.Created = now
+	entity.Updated = now
 
 	query := `
 		INSERT INTO {{$entityTableName}}s ({{- template "comma_separated_columns" .Root.Columns}}created,updated)

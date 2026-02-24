@@ -8,27 +8,63 @@ func (d *{{$entityArgumentName}}Repository) Store(ctx context.Context, entity *{
         return nil, ErrOperationBlocked
     }
 
-	const operation = "store"
-	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+    const operation = "store"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
-	var result *{{$entityStructName}}
-	var err error
+    var result *{{$entityStructName}}
+    var err error
 
-	if entity.ID > 0 {
-		// Update existing entity
-		err = d.Update(ctx, entity)
-		result = entity // Return the same entity after update
-	} else {
-		// Create new entity
-		result, err = d.Create(ctx, entity)
-	}
+    // Smart Upsert: If ID is missing, attempt to resolve it using unique 'Get' operations
+    if entity.ID == 0 {
+        var existing *{{$entityStructName}}
+        
+        {{- range $colName := .Root.Operations.Gets }}
+        {{- if ne $colName "id" }}
+        {{- $col := index $.Root.Columns $colName }}
+        // Check unique field: {{$colName}}
+        {{- if $col.AllowNull }}
+        if existing == nil && entity.{{$colName | pascalCase}} != nil {
+            existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
+        }
+        {{- else if eq $col.Type "varchar" "uuid" "string" "text" }}
+        if existing == nil && entity.{{$colName | pascalCase}} != "" {
+            existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
+        }
+        {{- else if eq $col.Type "int8" "int16" "int32" "int64" "float" }}
+        if existing == nil && entity.{{$colName | pascalCase}} != 0 {
+            existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
+        }
+        {{- else }}
+        // Fallback for dates/bools
+        if existing == nil {
+            existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
+        }
+        {{- end }}
+        {{- end }}
+        {{- end }}
 
-	// Handle errors
-	if err != nil {
-		return nil, err
-	}
+        // If a record was found via unique fields, map the ID and Version so Update() succeeds
+        if existing != nil {
+            entity.ID = existing.ID
+            entity.Version = existing.Version
+        }
+    }
 
-	return result, nil
+    if entity.ID > 0 {
+        // Update existing entity
+        err = d.Update(ctx, entity)
+        result = entity // Return the same entity after update
+    } else {
+        // Create new entity
+        result, err = d.Create(ctx, entity)
+    }
+
+    // Handle errors
+    if err != nil {
+        return nil, err
+    }
+
+    return result, nil
 }
 
 {{end}}
