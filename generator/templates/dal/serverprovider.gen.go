@@ -126,6 +126,7 @@ func (s *ServerProvider) connectInstance(inst DBInstance) (*sql.DB, error) {
 
 	// Test the connection
 	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, err
 	}
 

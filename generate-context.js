@@ -10,6 +10,8 @@ const CONTENT_TARGETS = [
   'go.mod',
   'cmd',
   'generator',
+  'generator/templates/dal',
+  'generator/templates/sql',
   'version',
   'main.go'
 ];

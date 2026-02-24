@@ -100,15 +100,16 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 
 		// The local cache should contain the user.
 		// We can directly check using the internal getByIDCached.
-		cachedBefore, _ := userDAL.getByIDCached(created.ID)
+		concreteDAL := userDAL.(*UserDAL)
+		cachedBefore, _ := concreteDAL.getByIDCached(created.ID)
 		assert.NotNil(t, cachedBefore, "Expected local cache to contain the user before invalidation")
 
 		// Now simulate a pub/sub invalidation event.
-		cacheKey := userDAL.getCacheKey(created.ID)
+		cacheKey := concreteDAL.getCacheKey(created.ID)
 		fakeCacheProv.SimulateCacheInvalidation("user", cacheKey)
 
 		// After invalidation, the local cache should be cleared.
-		cachedAfter, _ := userDAL.getByIDCached(created.ID)
+		cachedAfter, _ := concreteDAL.getByIDCached(created.ID)
 		assert.Nil(t, cachedAfter, "Expected local cache to be cleared after pub/sub invalidation")
 	})
 }

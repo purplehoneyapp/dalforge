@@ -410,7 +410,8 @@ func TestUserGetEmail(t *testing.T) {
 		assert.Equal(t, 0.0, cacheHitsCounter, "Expected zero cache hits for get_by_email operation")
 
 		// Test missing entry
-		_, err = userDAL.getByEmail(ctx, "nonexisting@example.com")
+		concreteDAL := userDAL.(*UserDAL)
+		_, err = concreteDAL.getByEmail(ctx, "nonexisting@example.com")
 		assert.ErrorIs(t, err, ErrNotFound)
 
 		// Test using cache

@@ -51,13 +51,19 @@ func generate(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to read directory '%s': %v", inputDir, err)
 	}
 
+	// Instantiate the generator ONCE outside the loop
+	gen, err := generator.NewGenerator()
+	if err != nil {
+		log.Fatalf("Failed creating generator %v", err)
+	}
+
 	for _, entry := range entries {
 		// Only consider files (ignore directories)
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
 			fileName := entry.Name()
 			baseName := strings.TrimSuffix(fileName, ".yaml")
 
-			// skip serverprovider and db_config.example files as those are not entity files.
+			// skip serverprovider and db_config files as those are not entity files.
 			if strings.Contains(baseName, "serverprovider") || strings.Contains(baseName, "db_config") {
 				continue
 			}
@@ -66,19 +72,15 @@ func generate(cmd *cobra.Command, args []string) {
 			goPath := filepath.Join(outputDir, baseName+".gen.go")
 			sqlPath := filepath.Join(outputDir, baseName+".sql")
 
-			// Print out the would-be generated file paths
-			generator, err := generator.NewGenerator()
-			if err != nil {
-				log.Fatalf("Failed creating generator %v", err)
-			}
-
 			data, err := os.ReadFile(inputFile)
 			if err != nil {
 				log.Fatalf("Failed reading file: %s", err)
 			}
 
 			yamlContent := string(data)
-			dalFile, err := generator.GenerateDAL(yamlContent)
+
+			// Generate DAL Go file
+			dalFile, err := gen.GenerateDAL(yamlContent)
 			if err != nil {
 				log.Fatalf("failed GenerateDAL on file %s, %v", inputFile, err)
 			}
@@ -94,14 +96,10 @@ func generate(cmd *cobra.Command, args []string) {
 			}
 			fmt.Printf("Generated DAL: %s\n", goPath)
 
-			sqlFile, err := generator.GenerateSQL(yamlContent)
+			// Generate SQL file
+			sqlFile, err := gen.GenerateSQL(yamlContent)
 			if err != nil {
 				log.Fatalf("failed GenerateSQL on file %s, %v", inputFile, err)
-			}
-
-			err = generator.CopyOtherFiles(outputDir)
-			if err != nil {
-				log.Fatalf("failed writing dbprovider to path %s, %v", outputDir, err)
 			}
 
 			err = os.WriteFile(sqlPath, []byte(sqlFile), 0644)
@@ -111,6 +109,12 @@ func generate(cmd *cobra.Command, args []string) {
 
 			fmt.Printf("Generated SQL: %s\n", sqlPath)
 		}
+	}
+
+	// MOVED OUTSIDE THE LOOP: Copy shared infrastructure files only once
+	err = gen.CopyOtherFiles(outputDir)
+	if err != nil {
+		log.Fatalf("failed writing shared provider files to path %s, %v", outputDir, err)
 	}
 }
 

@@ -4,31 +4,22 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql" // or another driver if desired
-	"gopkg.in/yaml.v3"
 )
 
 // DBProvider defines the interface your ServerProvider must implement.
 type DBProvider interface {
-	// GetDatabase returns a *sql.DB given an entityName, a flag indicating if it’s a write operation,
 	GetDatabase(entityName string, isWriteOperation bool) (*sql.DB, error)
-
-	// mode is: "read", "write" or "all"
 	AllDatabases(entityName string, mode string) []*sql.DB
-
-	// Connect connects to all databases defined in the YAML configuration.
 	Connect() error
-
-	// Disconnect closes all database connections.
 	Disconnect() error
 }
 
 // ServerProvider is an implementation of DBProvider.
 type ServerProvider struct {
-	config *serverConfig
+	config *ServerConfig
 	// groups stores references to each server group keyed by the group name.
 	groups map[string]*dbGroup
 }
@@ -42,49 +33,53 @@ type dbGroup struct {
 	writes   []*sql.DB
 }
 
-// serverConfig represents the YAML structure.
-type serverConfig struct {
-	ServerGroup []struct {
-		Name      string   `yaml:"name"`
-		Entities  []string `yaml:"entites"` // note the YAML tag is "entites" per your sample
-		Instances struct {
-			Reads  []dbInstance `yaml:"reads"`
-			Writes []dbInstance `yaml:"writes"`
-		} `yaml:"instances"`
-	} `yaml:"serverGroup"`
+// ServerConfig represents the root configuration for the database topology.
+type ServerConfig struct {
+	ServerGroups []ServerGroupConfig `yaml:"serverGroup" json:"serverGroup"`
 }
 
-// dbInstance represents one database connection (read or write).
-type dbInstance struct {
-	Server      string `yaml:"server"`
-	Database    string `yaml:"database"`
-	Credentials struct {
-		User string `yaml:"user"`
-		Pass string `yaml:"pass"`
-	} `yaml:"credentials"`
+// ServerGroupConfig maps a group of entities to specific read/write database instances.
+type ServerGroupConfig struct {
+	Name      string          `yaml:"name" json:"name"`
+	Entities  []string        `yaml:"entities" json:"entities"`
+	Instances InstancesConfig `yaml:"instances" json:"instances"`
 }
 
-// NewServerProvider creates a new ServerProvider given a path to the YAML config.
-func NewServerProvider(configurationYaml string) (*ServerProvider, error) {
-	// Expand environment variables like ${USER_DB_PASS}
-	expandedData := os.ExpandEnv(string(configurationYaml))
+// InstancesConfig holds the read and write DB instances.
+type InstancesConfig struct {
+	Reads  []DBInstance `yaml:"reads" json:"reads"`
+	Writes []DBInstance `yaml:"writes" json:"writes"`
+}
 
-	var cfg serverConfig
-	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+// DBInstance represents one database connection (read or write).
+type DBInstance struct {
+	Server      string            `yaml:"server" json:"server"`
+	Database    string            `yaml:"database" json:"database"`
+	Credentials CredentialsConfig `yaml:"credentials" json:"credentials"`
+}
+
+// CredentialsConfig holds the user and password for a database connection.
+type CredentialsConfig struct {
+	User string `yaml:"user" json:"user"`
+	Pass string `yaml:"pass" json:"pass"`
+}
+
+// NewServerProvider creates a new ServerProvider given a populated ServerConfig struct.
+func NewServerProvider(cfg *ServerConfig) (*ServerProvider, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration cannot be nil")
 	}
 
 	return &ServerProvider{
-		config: &cfg,
+		config: cfg,
 		groups: make(map[string]*dbGroup),
 	}, nil
 }
 
-// Connect reads the YAML file, parses it, expands environment variables, and connects to all DBs.
+// Connect parses the configuration and connects to all DBs.
 func (s *ServerProvider) Connect() error {
-
 	// Create DB connections for each server group
-	for _, group := range s.config.ServerGroup {
+	for _, group := range s.config.ServerGroups {
 		dbGrp := &dbGroup{
 			name:     group.Name,
 			entities: group.Entities,
@@ -94,7 +89,7 @@ func (s *ServerProvider) Connect() error {
 		for _, inst := range group.Instances.Reads {
 			dbConn, err := s.connectInstance(inst)
 			if err != nil {
-				return fmt.Errorf("failed to connect read instance: %w", err)
+				return fmt.Errorf("failed to connect read instance for group %s: %w", group.Name, err)
 			}
 			dbGrp.reads = append(dbGrp.reads, dbConn)
 		}
@@ -103,7 +98,7 @@ func (s *ServerProvider) Connect() error {
 		for _, inst := range group.Instances.Writes {
 			dbConn, err := s.connectInstance(inst)
 			if err != nil {
-				return fmt.Errorf("failed to connect write instance: %w", err)
+				return fmt.Errorf("failed to connect write instance for group %s: %w", group.Name, err)
 			}
 			dbGrp.writes = append(dbGrp.writes, dbConn)
 		}
@@ -115,9 +110,8 @@ func (s *ServerProvider) Connect() error {
 }
 
 // connectInstance creates a *sql.DB for the given instance.
-func (s *ServerProvider) connectInstance(inst dbInstance) (*sql.DB, error) {
-	// Build DataSourceName for MySQL driver. Adjust if you’re using a different driver.
-	// Example: "myapp:password@tcp(readserver1.domain)/myapp?parseTime=true"
+func (s *ServerProvider) connectInstance(inst DBInstance) (*sql.DB, error) {
+	// Build DataSourceName for MySQL driver.
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
 		inst.Credentials.User,
 		inst.Credentials.Pass,
@@ -129,10 +123,10 @@ func (s *ServerProvider) connectInstance(inst dbInstance) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Optionally, you can configure db.SetMaxIdleConns, db.SetMaxOpenConns, etc.
 
 	// Test the connection
 	if err := db.Ping(); err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -153,17 +147,13 @@ func (s *ServerProvider) Disconnect() error {
 }
 
 // AllDatabases returns all sql.DB connections associated with the given entity.
-// Optional mode: "read", "write", or "all" (default).
+// Optional mode: "read", "write", or "all".
 func (s *ServerProvider) AllDatabases(entityName string, mode string) []*sql.DB {
-	// Determine the connection mode filter
-	connectionMode := mode
-
 	var result []*sql.DB
 
-	// Assuming you have access to your dbGroups (you might need to pass them as a parameter)
-	for _, group := range s.groups { // Replace with your actual dbGroups access
+	for _, group := range s.groups {
 		if contains(group.entities, entityName) {
-			switch connectionMode {
+			switch mode {
 			case "read":
 				result = append(result, group.reads...)
 			case "write":
@@ -190,15 +180,11 @@ func contains(slice []string, item string) bool {
 
 // GetDatabase looks up the server group for the given entityName, then picks a read or write DB.
 func (s *ServerProvider) GetDatabase(entityName string, isWriteOperation bool) (*sql.DB, error) {
-	// 1) Find which group handles this entity
 	grp := s.findGroupByEntity(entityName)
 	if grp == nil {
-		// Could return nil or panic if not found.
-		// For production, you might want to handle this error more gracefully.
 		return nil, fmt.Errorf("could not find settings for entity: %s", entityName)
 	}
 
-	// 2) Return a DB from writes if it's a write operation
 	if isWriteOperation {
 		if len(grp.writes) == 0 {
 			return nil, fmt.Errorf("no write instances found for entity: %s", entityName)
@@ -207,12 +193,11 @@ func (s *ServerProvider) GetDatabase(entityName string, isWriteOperation bool) (
 		return grp.writes[0], nil
 	}
 
-	// 3) Otherwise, pick from the read connections
 	if len(grp.reads) == 0 {
 		return nil, fmt.Errorf("no read instances found for entity: %s", entityName)
 	}
-	// Example load-balancing: pick index = id % len(reads)
-	idx := rand.Intn(len(grp.reads)) // random index
+	// Example load-balancing: pick random read connection
+	idx := rand.Intn(len(grp.reads))
 	return grp.reads[idx], nil
 }
 

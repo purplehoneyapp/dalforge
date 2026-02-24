@@ -28,7 +28,6 @@ func init() {
 	gob.Register({{$entityStructName}}{})
 }
 
-
 type {{$entityStructName}} struct {
     ID        int64
     version   int32
@@ -37,6 +36,43 @@ type {{$entityStructName}} struct {
 
     Created   time.Time
     Updated   time.Time
+}
+
+// {{$entityStructName}}Repository defines the interface for the {{$entityStructName}} DAL.
+// Use this interface in your services to easily mock the database.
+type {{$entityStructName}}Repository interface {
+    CreateTable(ctx context.Context) error
+    GetByID(ctx context.Context, id int64) (*{{$entityStructName}}, error)
+
+    InvalidateCache(entity *{{$entityStructName}})
+    FlushListCache()
+
+{{- if and .Operations .Operations.Store}}
+    Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error)
+    CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error)
+    Update(ctx context.Context, entity *{{$entityStructName}}) error
+    Store(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error)
+{{- end}}
+
+{{- if and .Operations .Operations.Delete}}
+    Delete(ctx context.Context, entity *{{$entityStructName}}) error
+{{- end}}
+
+{{- if and .Operations .Operations.Gets }}
+    {{- range .Operations.Gets }}
+        {{- if ne . "id"}}
+            {{- $col := index $.Columns . }}
+    GetBy{{pascalCase .}}(ctx context.Context, {{camelCase .}} {{toGoType $col.Type $col.AllowNull}}) (*{{$entityStructName}}, error)
+        {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- if and .Operations .Operations.Lists }}
+    {{- range .Operations.Lists }}
+    {{pascalCase .Name}}(ctx context.Context, {{listFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
+    Count{{pascalCase .Name}}(ctx context.Context, {{countFuncParams . $.Columns}}) (int64, error)
+    {{- end }}
+{{- end }}
 }
 
 type {{$entityStructName}}DAL struct {
@@ -49,8 +85,9 @@ type {{$entityStructName}}DAL struct {
 	dbBreaker           *gobreaker.CircuitBreaker
 }
 
+// New{{$entityStructName}}DAL now returns the {{$entityStructName}}Repository interface.
 func New{{$entityStructName}}DAL(provider DBProvider, cacheProvider CacheProvider,
-    configProvider ConfigProvider, dbSettings gobreaker.Settings) *{{$entityStructName}}DAL {
+    configProvider ConfigProvider, dbSettings gobreaker.Settings) {{$entityStructName}}Repository {
 
     if configProvider == nil {
         configProvider = DefaultConfigProvider{}
@@ -103,7 +140,6 @@ func (d *{{$entityStructName}}DAL) getCacheKey(id int64) string {
 }
 
 {{template "invalidate_cache" (dict "Root" $ "ColumnName" "id")}}
-
 {{template "create_table" (dict "Root" $ "ColumnName" "id")}}
 
 {{- if and .Operations .Operations.Store}}

@@ -45,14 +45,15 @@ func TestCircuitBreaker(t *testing.T) {
 	}
 
 	// Now the circuit breaker should have tripped (i.e. state open).
-	state := userDAL.dbBreaker.State()
+	concreteDAL := userDAL.(*UserDAL)
+	state := concreteDAL.dbBreaker.State()
 	assert.Equal(t, gobreaker.StateOpen, state, "Expected circuit breaker to be open after consecutive failures")
 
 	// Optionally wait for the timeout period so the breaker transitions toward half-open.
 	time.Sleep(3 * time.Second)
 	_, err := userDAL.GetByID(ctx, 1)
 	assert.Error(t, err, "Expected error on trial call in half-open state")
-	stateAfter := userDAL.dbBreaker.State()
+	stateAfter := concreteDAL.dbBreaker.State()
 	t.Logf("Circuit breaker state after timeout: %v", stateAfter)
 }
 
@@ -80,15 +81,16 @@ func TestCircuitBreakerWithErrNotFound(t *testing.T) {
 		ctx := context.Background()
 
 		// Create a user.
-		res, err := userDAL.getByID(ctx, 10000)
+		concreteDAL := userDAL.(*UserDAL)
+		res, err := concreteDAL.getByID(ctx, 10000)
 		assert.ErrorIs(t, err, ErrNotFound)
 		assert.Nil(t, res)
 
-		res2, err2 := userDAL.getByID(ctx, 10001)
+		res2, err2 := concreteDAL.getByID(ctx, 10001)
 		assert.ErrorIs(t, err2, ErrNotFound)
 		assert.Nil(t, res2)
 
-		state := userDAL.dbBreaker.State()
+		state := concreteDAL.dbBreaker.State()
 		assert.Equal(t, gobreaker.StateClosed, state, "Expected circuit breaker to be closed after ErrNotFound")
 	})
 }
