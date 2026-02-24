@@ -267,7 +267,7 @@ func TestUserCreateBulk(t *testing.T) {
 
 		ctx := context.Background()
 
-		const numEntries = 50
+		const numEntries = 5000
 		var users []*User
 
 		for i := 1; i <= numEntries; i++ {
