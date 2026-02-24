@@ -4,7 +4,7 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{$entityStructName}}DAL) CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
 	if d.configProvider.BlockedWrites("{{$entityTableName}}") {
 		return nil, ErrOperationBlocked
 	}
@@ -26,7 +26,7 @@ func (d *{{$entityStructName}}DAL) CreateBulk(ctx context.Context, entities []*{
 	return result.([]*{{$entityStructName}}), err
 }
 
-func (d *{{$entityStructName}}DAL) createBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
 	const operation = "create_bulk"
 	start := time.Now()
 

@@ -4,13 +4,13 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{$entityStructName}}DAL) Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
     }
 
 	if entity.ID > 0 {
-		return nil, fmt.Errorf("{{$entityStructName}}DAL.Create failed as ID > 0")
+		return nil, fmt.Errorf("{{$entityArgumentName}}Repository.Create failed as ID > 0")
 	}
 
 	const operation = "create"
@@ -32,7 +32,7 @@ func (d *{{$entityStructName}}DAL) Create(ctx context.Context, entity *{{$entity
 	return entity, err
 }
 
-func (d *{{$entityStructName}}DAL) create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
 	const operation = "create"
 	start := time.Now()
 

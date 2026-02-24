@@ -3,7 +3,7 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{$entityStructName}}DAL) InvalidateCache(entity *{{$entityStructName}}) {
+func (d *{{$entityArgumentName}}Repository) InvalidateCache(entity *{{$entityStructName}}) {
     cacheKey := d.getCacheKey(entity.ID)
 	d.cache.Delete(cacheKey)
 
@@ -11,7 +11,7 @@ func (d *{{$entityStructName}}DAL) InvalidateCache(entity *{{$entityStructName}}
 	d.cacheProvider.InvalidateCache("{{$entityTableName}}", cacheKey)
 }
 
-func (d *{{$entityStructName}}DAL) FlushListCache() {
+func (d *{{$entityArgumentName}}Repository) FlushListCache() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
     d.countCache.Flush()
@@ -23,12 +23,12 @@ func (d *{{$entityStructName}}DAL) FlushListCache() {
 
 
 // Handles cache invalidations. Just remove cached entry by key
-func (d *{{$entityStructName}}DAL) onCacheInvalidated(key string) {
+func (d *{{$entityArgumentName}}Repository) onCacheInvalidated(key string) {
     d.cache.Delete(key)
 }
 
 // Handles cache_flush_list. Just clears all lists cache.
-func (d *{{$entityStructName}}DAL) onCacheFlushList() {
+func (d *{{$entityArgumentName}}Repository) onCacheFlushList() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
     d.countCache.Flush()

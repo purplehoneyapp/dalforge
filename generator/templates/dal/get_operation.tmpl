@@ -4,7 +4,7 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{$entityStructName}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
     if d.configProvider.BlockedReads("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
     }
@@ -20,7 +20,7 @@ func (d *{{$entityStructName}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context
     if found {
         entityId, ok := val.(int64)
         if !ok {
-            return nil, fmt.Errorf("{{$entityStructName}}DAL.GetBy{{.ColumnName | pascalCase}}: Cache returned wrong type; expected ID type")
+            return nil, fmt.Errorf("{{$entityArgumentName}}Repository.GetBy{{.ColumnName | pascalCase}}: Cache returned wrong type; expected ID type")
         }
 
         dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
@@ -48,7 +48,7 @@ func (d *{{$entityStructName}}DAL) GetBy{{.ColumnName | pascalCase}}(ctx context
     return entity, err
 }
 
-func (d *{{$entityStructName}}DAL) getBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ctx context.Context, {{.ColumnName | camelCase}} {{toGoType $column.Type $column.AllowNull}}) (*{{$entityStructName}}, error) {
     const operation = "get_by_{{.ColumnName | snakeCase}}"
     dbStart := time.Now()
 

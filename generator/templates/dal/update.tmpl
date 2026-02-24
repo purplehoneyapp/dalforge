@@ -4,7 +4,7 @@
 {{- $entityArgumentName := camelCase .Root.Name }}
 
 // ErrNotFound is returned in case there was nothing to update; either missing id or newer version of entity is already stored.
-func (d *{{$entityStructName}}DAL) Update(ctx context.Context, entity *{{$entityStructName}}) error {
+func (d *{{$entityArgumentName}}Repository) Update(ctx context.Context, entity *{{$entityStructName}}) error {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return ErrOperationBlocked
     }
@@ -44,7 +44,7 @@ func (d *{{$entityStructName}}DAL) Update(ctx context.Context, entity *{{$entity
 	return nil
 }
 
-func (d *{{$entityStructName}}DAL) update(ctx context.Context, entity *{{$entityStructName}}) error {
+func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *{{$entityStructName}}) error {
 	const operation = "update"
 	start := time.Now()
 

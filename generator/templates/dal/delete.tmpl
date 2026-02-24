@@ -5,7 +5,7 @@
 
 // Deletes entity by id,
 // returns ErrNotFound in case nothing is deleted.
-func (d *{{$entityStructName}}DAL) Delete(ctx context.Context, entity *{{$entityStructName}}) error {
+func (d *{{$entityArgumentName}}Repository) Delete(ctx context.Context, entity *{{$entityStructName}}) error {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return ErrOperationBlocked
     }
@@ -33,7 +33,7 @@ func (d *{{$entityStructName}}DAL) Delete(ctx context.Context, entity *{{$entity
 	return err
 }
 
-func (d *{{$entityStructName}}DAL) delete(ctx context.Context, id int64) error {
+func (d *{{$entityArgumentName}}Repository) delete(ctx context.Context, id int64) error {
 	start := time.Now()
 	const operation = "delete"
 

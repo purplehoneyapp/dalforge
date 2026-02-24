@@ -3,7 +3,7 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-func (d *{{$entityStructName}}DAL) Store(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) Store(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
     }

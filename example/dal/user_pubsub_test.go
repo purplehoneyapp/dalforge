@@ -100,7 +100,7 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 
 		// The local cache should contain the user.
 		// We can directly check using the internal getByIDCached.
-		concreteDAL := userDAL.(*UserDAL)
+		concreteDAL := userDAL.(*userRepository)
 		cachedBefore, _ := concreteDAL.getByIDCached(created.ID)
 		assert.NotNil(t, cachedBefore, "Expected local cache to contain the user before invalidation")
 

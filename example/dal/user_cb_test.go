@@ -45,7 +45,7 @@ func TestCircuitBreaker(t *testing.T) {
 	}
 
 	// Now the circuit breaker should have tripped (i.e. state open).
-	concreteDAL := userDAL.(*UserDAL)
+	concreteDAL := userDAL.(*userRepository)
 	state := concreteDAL.dbBreaker.State()
 	assert.Equal(t, gobreaker.StateOpen, state, "Expected circuit breaker to be open after consecutive failures")
 
@@ -81,7 +81,7 @@ func TestCircuitBreakerWithErrNotFound(t *testing.T) {
 		ctx := context.Background()
 
 		// Create a user.
-		concreteDAL := userDAL.(*UserDAL)
+		concreteDAL := userDAL.(*userRepository)
 		res, err := concreteDAL.getByID(ctx, 10000)
 		assert.ErrorIs(t, err, ErrNotFound)
 		assert.Nil(t, res)

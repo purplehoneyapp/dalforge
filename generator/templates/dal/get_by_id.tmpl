@@ -3,7 +3,7 @@
 {{- $entityTableName := snakeCase .Name }}
 {{- $entityArgumentName := camelCase .Name }}
 
-func (d *{{$entityStructName}}DAL) GetByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) GetByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
     if d.configProvider.BlockedReads("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
     }
@@ -36,7 +36,7 @@ func (d *{{$entityStructName}}DAL) GetByID(ctx context.Context, id int64) (*{{$e
     return entity, err
 }
 
-func (d *{{$entityStructName}}DAL) setCached(entity *{{$entityStructName}}) error {
+func (d *{{$entityArgumentName}}Repository) setCached(entity *{{$entityStructName}}) error {
     // if we have not reached the maximum number of items set the cache. otherwise expirations will
 	// handle this
     itemCount := d.cache.ItemCount()
@@ -55,14 +55,14 @@ func (d *{{$entityStructName}}DAL) setCached(entity *{{$entityStructName}}) erro
 }
 
 // Gets entity from cache only or return nil
-func (d *{{$entityStructName}}DAL) getByIDCached(id int64) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) getByIDCached(id int64) (*{{$entityStructName}}, error) {
     const operation = "get_by_id"
     cacheKey := d.getCacheKey(id)
     val, found := d.cache.Get(cacheKey)
     if found {
         entity, ok := val.(*{{$entityStructName}})
         if !ok {
-            return nil, fmt.Errorf("{{$entityStructName}}DAL.GetById: Cache returned wrong type")
+            return nil, fmt.Errorf("{{$entityArgumentName}}Repository.GetById: Cache returned wrong type")
         }
 
         dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
@@ -76,7 +76,7 @@ func (d *{{$entityStructName}}DAL) getByIDCached(id int64) (*{{$entityStructName
     return nil, nil
 }
 
-func (d *{{$entityStructName}}DAL) getByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int64) (*{{$entityStructName}}, error) {
     const operation = "get_by_id"
     dbStart := time.Now();
 

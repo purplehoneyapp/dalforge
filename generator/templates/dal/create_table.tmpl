@@ -7,7 +7,7 @@
 //go:embed {{$entityTableName}}.sql
 var schema{{$entityStructName}} string
 
-func (d *{{$entityStructName}}DAL) CreateTable(ctx context.Context) error {
+func (d *{{$entityArgumentName}}Repository) CreateTable(ctx context.Context) error {
 	// Get write database connection
 	dbs := d.dbProvider.AllDatabases("{{$entityArgumentName}}", "write")
 
@@ -40,7 +40,7 @@ func (d *{{$entityStructName}}DAL) CreateTable(ctx context.Context) error {
 	return nil
 }
 
-func (d *{{$entityStructName}}DAL) tableExists(ctx context.Context, db *sql.DB) (bool, error) {
+func (d *{{$entityArgumentName}}Repository) tableExists(ctx context.Context, db *sql.DB) (bool, error) {
 	query := `
 		SELECT 1
 		FROM information_schema.tables 

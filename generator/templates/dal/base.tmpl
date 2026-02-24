@@ -38,7 +38,7 @@ type {{$entityStructName}} struct {
     Updated   time.Time
 }
 
-// {{$entityStructName}}Repository defines the interface for the {{$entityStructName}} DAL.
+// {{$entityStructName}}Repository defines the interface for the {{$entityStructName}}.
 // Use this interface in your services to easily mock the database.
 type {{$entityStructName}}Repository interface {
     CreateTable(ctx context.Context) error
@@ -75,7 +75,7 @@ type {{$entityStructName}}Repository interface {
 {{- end }}
 }
 
-type {{$entityStructName}}DAL struct {
+type {{$entityArgumentName}}Repository struct {
     dbProvider          DBProvider
     cache               *cache.Cache  // Simple TTL cache for single items, for inmemory cache management
   	listCache           *cache.Cache // Cache for lists. Simple TTL cache, for inmemory cache management
@@ -118,7 +118,7 @@ func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider Cache
 	listCache := cache.New(5*time.Minute, 10*time.Minute)
     countCache := cache.New(5*time.Minute, 10*time.Minute)
 
-    newDAL := &{{$entityStructName}}DAL{
+    newDAL := &{{$entityArgumentName}}Repository{
         dbProvider:     provider,
         cache:          singleCache,
         listCache:      listCache,
@@ -135,7 +135,7 @@ func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider Cache
     return newDAL
 }
 
-func (d *{{$entityStructName}}DAL) getCacheKey(id int64) string {
+func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
     return fmt.Sprintf("{{$entityTableName}}_id:%d", id)
 }
 

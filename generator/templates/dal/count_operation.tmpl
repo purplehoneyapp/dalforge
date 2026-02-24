@@ -4,7 +4,7 @@
 {{- $entityArgumentName := camelCase .Root.Name }}
 
 // Count function for the specific list
-func (d *{{$entityStructName}}DAL) Count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
+func (d *{{$entityArgumentName}}Repository) Count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
 	if d.configProvider.BlockedReads("{{$entityTableName}}") {
 		return 0, ErrOperationBlocked
 	}
@@ -17,7 +17,7 @@ func (d *{{$entityStructName}}DAL) Count{{.List.Name | pascalCase}}(ctx context.
 	if found {
 		count, ok := val.(int64)
 		if !ok {
-			return 0, fmt.Errorf("{{$entityStructName}}DAL.Count{{.List.Name | pascalCase}}: Cache returned wrong type; expected int64")
+			return 0, fmt.Errorf("{{$entityArgumentName}}Repository.Count{{.List.Name | pascalCase}}: Cache returned wrong type; expected int64")
 		}
 
 		dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
@@ -42,7 +42,7 @@ func (d *{{$entityStructName}}DAL) Count{{.List.Name | pascalCase}}(ctx context.
 	return count.(int64), nil
 }
 
-func (d *{{$entityStructName}}DAL) count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
+func (d *{{$entityArgumentName}}Repository) count{{.List.Name | pascalCase}}(ctx context.Context, {{countFuncParams .List .Root.Columns}}) (int64, error) {
 	const operation = "count_{{.List.Name | snakeCase}}"
 	dbStart := time.Now()
 
