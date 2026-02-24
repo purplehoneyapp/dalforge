@@ -71,47 +71,47 @@ func toGoType(yamlType string, allowNull bool) string {
 	switch yamlType {
 	case "int8":
 		if allowNull {
-			return "sql.NullInt16" // int8 maps to NullInt16 in Go
+			return "*int8" // int8 maps to NullInt16 in Go
 		}
 		return "int8"
 	case "int32":
 		if allowNull {
-			return "sql.NullInt32"
+			return "*int32"
 		}
 		return "int32"
 	case "int64":
 		if allowNull {
-			return "sql.NullInt64"
+			return "*int64"
 		}
 		return "int64"
 	case "float":
 		if allowNull {
-			return "sql.NullFloat64"
+			return "*float"
 		}
 		return "float64"
 	case "uuid":
 		if allowNull {
-			return "sql.NullString"
+			return "*string"
 		}
 		return "string"
 	case "varchar":
 		if allowNull {
-			return "sql.NullString"
+			return "*string"
 		}
 		return "string"
 	case "text":
 		if allowNull {
-			return "sql.NullString"
+			return "*string"
 		}
 		return "string"
 	case "bool":
 		if allowNull {
-			return "sql.NullBool"
+			return "*bool"
 		}
 		return "bool"
 	case "date", "time", "datetime":
 		if allowNull {
-			return "sql.NullTime"
+			return "*time.Time"
 		}
 		return "time.Time"
 	default:

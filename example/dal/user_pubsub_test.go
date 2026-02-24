@@ -2,7 +2,6 @@ package dal
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -82,12 +81,14 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 		ctx := context.Background()
 
 		// Create a user so that it is cached.
+		now := time.Now()
+		s := "active"
 		newUser := &User{
 			Age:       25,
 			Email:     "pubsub_test@example.com",
 			Uuid:      uuid.New().String(),
-			Status:    sql.NullString{String: "active", Valid: true},
-			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			Status:    &s,
+			Birthdate: &now,
 		}
 		created, err := userDAL.Create(ctx, newUser)
 		assert.NoError(t, err)
@@ -177,8 +178,8 @@ func TestRedisPubSubInvalidationBetweenInstances(t *testing.T) {
 		Age:       25,
 		Email:     "instance_test@example.com",
 		Uuid:      uuid.New().String(),
-		Status:    sql.NullString{String: "active", Valid: true},
-		Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+		Status:    Ptr("active"),
+		Birthdate: Ptr(time.Now()),
 	}
 	created, err := userDAL_A.Create(ctx, newUser)
 	assert.NoError(t, err)

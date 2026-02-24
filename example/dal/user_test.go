@@ -191,8 +191,8 @@ func TestUserCRUD(t *testing.T) {
 			Age:       25,
 			Email:     "test@example.com",
 			Uuid:      uuid.New().String(),
-			Status:    sql.NullString{String: "active", Valid: true},
-			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
 		}
 
 		created, err := userDAL.Create(ctx, newUser)
@@ -274,8 +274,8 @@ func TestUserCreateBulk(t *testing.T) {
 				Age:       25,
 				Email:     fmt.Sprintf("test_%02d@example.com", i),
 				Uuid:      uuid.New().String(),
-				Status:    sql.NullString{String: "active", Valid: true},
-				Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
 			}
 			users = append(users, newUser)
 		}
@@ -336,8 +336,8 @@ func TestUserBlockedReadsAndWrites(t *testing.T) {
 			Age:       25,
 			Email:     "test@example.com",
 			Uuid:      uuid.New().String(),
-			Status:    sql.NullString{String: "active", Valid: true},
-			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
 		}
 
 		_, err := userDAL.Create(ctx, newUser)
@@ -377,8 +377,8 @@ func TestUserGetEmail(t *testing.T) {
 			Age:       25,
 			Email:     "test@example.com",
 			Uuid:      uuid.New().String(),
-			Status:    sql.NullString{String: "active", Valid: true},
-			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
 		}
 
 		created, err := userDAL.Create(ctx, newUser)
@@ -459,8 +459,8 @@ func TestListById(t *testing.T) {
 				Age:       25,
 				Email:     fmt.Sprintf("test_%d@example.com", i),
 				Uuid:      uuid.New().String(),
-				Status:    sql.NullString{String: "active", Valid: true},
-				Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
 			}
 
 			created, err := userDAL.Create(ctx, newUser)
@@ -539,8 +539,8 @@ func TestListByIdCachingAndInvalidation(t *testing.T) {
 				Age:       25,
 				Email:     fmt.Sprintf("cache_test_%d@example.com", i),
 				Uuid:      uuid.New().String(),
-				Status:    sql.NullString{String: "active", Valid: true},
-				Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
 			}
 			created, err := userDAL.Create(ctx, newUser)
 			assert.NoError(t, err)
@@ -607,8 +607,8 @@ func TestListByBday(t *testing.T) {
 				Age:       30,
 				Email:     fmt.Sprintf("user_%02d@example.com", month),
 				Uuid:      uuid.New().String(),
-				Status:    sql.NullString{String: "active", Valid: true},
-				Birthdate: sql.NullTime{Time: birthdate, Valid: true},
+				Status:    Ptr("active"),
+				Birthdate: &birthdate,
 			}
 			created, err := userDAL.Create(ctx, newUser)
 			assert.NoError(t, err)
@@ -617,7 +617,7 @@ func TestListByBday(t *testing.T) {
 
 		// Test ListByBday for March 1, 1990.
 		bdayToTest := time.Date(1990, time.May, 1, 0, 0, 0, 0, time.UTC)
-		nullBday := sql.NullTime{Time: bdayToTest, Valid: true}
+		nullBday := Ptr(bdayToTest)
 		pageSize := 10
 
 		count, err := userDAL.CountListByBday(ctx, nullBday)
@@ -662,8 +662,8 @@ func TestOptimisticLocking(t *testing.T) {
 			Age:       25,
 			Email:     "optimistic@example.com",
 			Uuid:      uuid.New().String(),
-			Status:    sql.NullString{String: "active", Valid: true},
-			Birthdate: sql.NullTime{Time: time.Now(), Valid: true},
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
 		}
 		created, err := userDAL.Create(ctx, newUser)
 		assert.NoError(t, err)
