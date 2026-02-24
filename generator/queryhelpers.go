@@ -249,7 +249,8 @@ func listCacheKey(entityName string, list ListConfig, columns map[string]Column)
 		// If the column allows nulls, it's a pointer in Go.
 		// We generate an inline function to safely dereference it or return "nil".
 		if col.AllowNull {
-			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "nil" }; return *%s }(), `, goName, goName)
+			// why <<null>> - very unlikely there will be a value like this that would mix it with nil values of pointer.
+			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
@@ -276,7 +277,8 @@ func countCacheKey(entityName string, list ListConfig, columns map[string]Column
 		goName := CamelCaser(param)
 
 		if col.AllowNull {
-			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "nil" }; return *%s }(), `, goName, goName)
+			// why <<null>> - very unlikely there will be a value like this that would mix it with nil values of pointer.
+			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
