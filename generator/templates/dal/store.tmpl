@@ -9,7 +9,7 @@ func (d *{{$entityArgumentName}}Repository) Store(ctx context.Context, entity *{
     }
 
 	const operation = "store"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
 	var result *{{$entityStructName}}
 	var err error

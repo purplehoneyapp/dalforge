@@ -163,3 +163,67 @@ func ResetTelemetry() {
 	cacheReceivedMessages.Reset()
 	cacheErrorCounter.Reset()
 }
+
+// PrometheusTelemetryProvider implements TelemetryProvider using global Prometheus metrics.
+// Use this implementation in your production server environment.
+type PrometheusTelemetryProvider struct{}
+
+func (p PrometheusTelemetryProvider) IncDALOperation(entity, operation string) {
+	dalOperationsTotalCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncDBRequest(entity, operation string) {
+	dbRequestsCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncDBError(entity, operation string) {
+	dbRequestsErrorsCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) ObserveDBLatency(entity, operation string, durationSeconds float64) {
+	dbRequestsLatencyHistogram.WithLabelValues(entity, operation).Observe(durationSeconds)
+}
+
+func (p PrometheusTelemetryProvider) IncCacheWrite(entity string) {
+	dalCacheWritesCounter.WithLabelValues(entity).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCacheDelete(entity string) {
+	dalCacheDeletesCounter.WithLabelValues(entity).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCacheHit(entity, operation string) {
+	dalCacheHitsCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCacheMiss(entity, operation string) {
+	dalCacheMissesCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCacheError(entity, operation string) {
+	dalCacheErrorsCounter.WithLabelValues(entity, operation).Inc()
+}
+
+func (p PrometheusTelemetryProvider) SetCacheSize(entity string, size float64) {
+	dalCacheSizeGauge.WithLabelValues(entity).Set(size)
+}
+
+func (p PrometheusTelemetryProvider) ObserveCacheLatency(entity, operation string, durationSeconds float64) {
+	dalCacheLatencyHistogram.WithLabelValues(entity, operation).Observe(durationSeconds)
+}
+
+func (p PrometheusTelemetryProvider) SetCircuitBreakerState(name string, state float64) {
+	circuitBreakerStateGauge.WithLabelValues(name).Set(state)
+}
+
+func (p PrometheusTelemetryProvider) IncCachePubSubPublish(server string) {
+	cachePublishedMessages.WithLabelValues(server).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCachePubSubReceive(server string) {
+	cacheReceivedMessages.WithLabelValues(server).Inc()
+}
+
+func (p PrometheusTelemetryProvider) IncCachePubSubError(server string) {
+	cacheErrorCounter.WithLabelValues(server).Inc()
+}

@@ -77,6 +77,7 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 			fakeCacheProv,
 			nil, // Use default config provider
 			gobreaker.Settings{},
+			nil,
 		)
 		ctx := context.Background()
 
@@ -148,14 +149,14 @@ func TestRedisPubSubInvalidationBetweenInstances(t *testing.T) {
 	redisAddr := fmt.Sprintf("%s:%s", host, port.Port())
 
 	// Create two separate RedisCacheProviders (simulating two instances).
-	redisCacheProvA := NewRedisCacheProvider(redisAddr, "", 0)
+	redisCacheProvA := NewRedisCacheProvider(redisAddr, "", 0, nil)
 	err = redisCacheProvA.Connect()
 	if err != nil {
 		t.Fatalf("Instance A: failed to connect to Redis: %v", err)
 	}
 	defer redisCacheProvA.Close()
 
-	redisCacheProvB := NewRedisCacheProvider(redisAddr, "", 0)
+	redisCacheProvB := NewRedisCacheProvider(redisAddr, "", 0, nil)
 	err = redisCacheProvB.Connect()
 	if err != nil {
 		t.Fatalf("Instance B: failed to connect to Redis: %v", err)
@@ -167,8 +168,8 @@ func TestRedisPubSubInvalidationBetweenInstances(t *testing.T) {
 	defer teardownTestDB(t)
 
 	// Create two separate UserDAL instances using the same DBProvider but different cache providers.
-	userDAL_A := NewUserRepository(dbProvider, redisCacheProvA, nil, gobreaker.Settings{})
-	userDAL_B := NewUserRepository(dbProvider, redisCacheProvB, nil, gobreaker.Settings{})
+	userDAL_A := NewUserRepository(dbProvider, redisCacheProvA, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{})
+	userDAL_B := NewUserRepository(dbProvider, redisCacheProvB, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{})
 
 	// Give the subscriptions some time to initialize.
 	time.Sleep(3 * time.Second)

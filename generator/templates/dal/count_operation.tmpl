@@ -10,8 +10,8 @@ func (d *{{$entityArgumentName}}Repository) Count{{.List.Name | pascalCase}}(ctx
 	}
 
 	const operation = "count_{{.List.Name | snakeCase}}"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+	
 	cacheKey := {{countCacheKey $entityTableName .List .Root.Columns}}
 	val, found := d.countCache.Get(cacheKey)
 	if found {
@@ -20,12 +20,12 @@ func (d *{{$entityArgumentName}}Repository) Count{{.List.Name | pascalCase}}(ctx
 			return 0, fmt.Errorf("{{$entityArgumentName}}Repository.Count{{.List.Name | pascalCase}}: Cache returned wrong type; expected int64")
 		}
 
-		dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)        
 		return count, nil
 	}
 
 	// Otherwise, it's a cache miss or decode error
-	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	 d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)       
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
@@ -51,7 +51,7 @@ func (d *{{$entityArgumentName}}Repository) count{{.List.Name | pascalCase}}(ctx
 
 	db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName}}", false)
 	if dbErr != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return 0, dbErr
 	}
 
@@ -65,12 +65,12 @@ func (d *{{$entityArgumentName}}Repository) count{{.List.Name | pascalCase}}(ctx
 	)
 
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return 0, fmt.Errorf("failed to query {{$entityTableName}}s: %w", err)
 	}
 
-	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+	d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())	
 	return count, nil
 }
 {{end}}

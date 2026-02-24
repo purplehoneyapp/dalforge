@@ -182,6 +182,7 @@ func TestUserCRUD(t *testing.T) {
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 
 		ctx := context.Background()
@@ -261,6 +262,7 @@ func TestUserCreateBulk(t *testing.T) {
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 
 		ctx := context.Background()
@@ -327,6 +329,7 @@ func TestUserBlockedReadsAndWrites(t *testing.T) {
 			nil,            // cache provider (mock if needed)
 			configProvider, // config provider (mock if needed)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 
 		ctx := context.Background()
@@ -368,6 +371,7 @@ func TestUserGetEmail(t *testing.T) {
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 
 		ctx := context.Background()
@@ -447,6 +451,7 @@ func TestListById(t *testing.T) {
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 
 		ctx := context.Background()
@@ -528,6 +533,7 @@ func TestListByIdCachingAndInvalidation(t *testing.T) {
 			nil, // cache provider (default if nil)
 			nil, // config provider (default if nil)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 		ctx := context.Background()
 		const numEntries = 50
@@ -597,6 +603,7 @@ func TestListByBday(t *testing.T) {
 			nil, // cache provider (defaults to NoopCacheProvider if nil)
 			nil, // config provider (defaults to DefaultConfigProvider if nil)
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 		ctx := context.Background()
 
@@ -654,6 +661,7 @@ func TestOptimisticLocking(t *testing.T) {
 			nil, // default cache provider
 			nil, // default config provider
 			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
 		)
 		ctx := context.Background()
 

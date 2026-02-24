@@ -10,7 +10,7 @@ func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pascalCase}}(ct
     }
 
     const operation = "get_by_{{.ColumnName | snakeCase}}"
-    dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
     // key would for example be: user_email:test@something.com, but in this case cache is only mapping email -> id
     cacheKey := fmt.Sprintf("{{$entityTableName}}_{{.ColumnName | snakeCase}}:%v", {{.ColumnName | camelCase}})
@@ -23,13 +23,14 @@ func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pascalCase}}(ct
             return nil, fmt.Errorf("{{$entityArgumentName}}Repository.GetBy{{.ColumnName | pascalCase}}: Cache returned wrong type; expected ID type")
         }
 
-        dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)        
+        
         // return entity by that id
         return d.GetByID(ctx, entityId)
     }
 
     // Cache missed or error during fetching cached data
-	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)        	
 
 	// Fallback to database if cache miss or decoding fails
 	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
@@ -42,7 +43,7 @@ func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pascalCase}}(ct
 	entity := result.(*{{$entityStructName}})
 
 	// Store in cache {{.ColumnName | pascalCase}} -> ID mapping
-    dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}").Inc()
+    d.telemetryProvider.IncCacheWrite("{{$entityTableName}}")    
     d.cache.Set(cacheKey, entity.ID, time.Second*{{.Root.Caching.SingleExpirationSeconds}})
 
     return entity, err
@@ -60,7 +61,7 @@ func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ct
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
     if dbErr != nil {
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, dbErr
     }
 
@@ -78,12 +79,12 @@ func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ct
             return nil, ErrNotFound
         }
 
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, fmt.Errorf("failed to get {{$entityStructName}} by {{.ColumnName | pascalCase}}: %w", err)
     }
 
-    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())	
     return &entity, nil
 }
 {{end}}

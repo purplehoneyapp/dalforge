@@ -23,12 +23,18 @@ type RedisCacheProvider struct {
 	flushListHandlers map[string]func()
 	mu                sync.RWMutex
 
-	isClosed bool
+	isClosed  bool
+	telemetry TelemetryProvider
 }
 
 // NewRedisCacheProvider creates a new instance with the given Redis config.
-func NewRedisCacheProvider(addr, password string, db int) *RedisCacheProvider {
+func NewRedisCacheProvider(addr, password string, db int, telemetry TelemetryProvider) *RedisCacheProvider {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Fallback for tests or components not using telemetry
+	if telemetry == nil {
+		telemetry = NoopTelemetryProvider{}
+	}
 
 	provider := &RedisCacheProvider{
 		options: &redis.Options{
@@ -44,6 +50,7 @@ func NewRedisCacheProvider(addr, password string, db int) *RedisCacheProvider {
 		cancel:            cancel,
 		handlers:          make(map[string]func(string)),
 		flushListHandlers: make(map[string]func()),
+		telemetry:         telemetry,
 	}
 
 	return provider
@@ -71,7 +78,7 @@ func (p *RedisCacheProvider) Connect() error {
 		}
 	}
 
-	cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
+	p.telemetry.IncCachePubSubError(p.options.Addr)
 	log.Warnln("Redis connection permanently failed. Cache invalidation may be unreliable.")
 	return fmt.Errorf("failed to connect to Redis after %d retries: %w", maxRetries, err)
 }
@@ -79,7 +86,7 @@ func (p *RedisCacheProvider) Connect() error {
 // InvalidateCache publishes an invalidation message asynchronously (fire and forget).
 func (p *RedisCacheProvider) InvalidateCache(entityName, cacheKey string) error {
 	if p.isClosed {
-		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
+		p.telemetry.IncCachePubSubError(p.options.Addr)
 		return errors.New("cache provider is closed")
 	}
 
@@ -93,7 +100,7 @@ func (p *RedisCacheProvider) InvalidateCache(entityName, cacheKey string) error 
 		for i := 0; i < maxRetries; i++ {
 			err := p.client.Publish(p.ctx, channel, message).Err()
 			if err == nil {
-				cachePublishedMessages.WithLabelValues(p.options.Addr).Inc()
+				p.telemetry.IncCachePubSubPublish(p.options.Addr)
 				log.Debugf("Published cache invalidation: %s -> %s\n", entityName, cacheKey)
 				return
 			}
@@ -102,7 +109,7 @@ func (p *RedisCacheProvider) InvalidateCache(entityName, cacheKey string) error 
 			time.Sleep(delay)
 		}
 
-		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
+		p.telemetry.IncCachePubSubError(p.options.Addr)
 		log.Errorf("Failed to publish cache invalidation: %s -> %s after %d retries\n", entityName, cacheKey, maxRetries)
 	}()
 	return nil // Return immediately.
@@ -111,7 +118,7 @@ func (p *RedisCacheProvider) InvalidateCache(entityName, cacheKey string) error 
 // FlushListCache publishes an flush list message asynchronously (fire and forget).
 func (p *RedisCacheProvider) FlushListCache(entityName string) error {
 	if p.isClosed {
-		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
+		p.telemetry.IncCachePubSubError(p.options.Addr)
 		return errors.New("cache provider is closed")
 	}
 
@@ -125,7 +132,7 @@ func (p *RedisCacheProvider) FlushListCache(entityName string) error {
 		for i := 0; i < maxRetries; i++ {
 			err := p.client.Publish(p.ctx, channel, message).Err()
 			if err == nil {
-				cachePublishedMessages.WithLabelValues(p.options.Addr).Inc()
+				p.telemetry.IncCachePubSubPublish(p.options.Addr)
 				log.Debugf("Published cache_flush_list: %s \n", entityName)
 				return
 			}
@@ -134,7 +141,7 @@ func (p *RedisCacheProvider) FlushListCache(entityName string) error {
 			time.Sleep(delay)
 		}
 
-		cacheErrorCounter.WithLabelValues(p.options.Addr).Inc()
+		p.telemetry.IncCachePubSubError(p.options.Addr)
 		log.Errorf("Failed to publish cache_flush_list: %s after %d retries\n", entityName, maxRetries)
 	}()
 	return nil // Return immediately.
@@ -181,7 +188,7 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 		p.mu.RUnlock()
 		if exists {
 			handler(msg.Payload)
-			cacheReceivedMessages.WithLabelValues(p.options.Addr).Inc()
+			p.telemetry.IncCachePubSubReceive(p.options.Addr)
 		} else {
 			log.Warnf("No handler registered for entity: %s\n", entityName)
 		}
@@ -204,7 +211,7 @@ func (p *RedisCacheProvider) listenForFlushList(entityName string) {
 		p.mu.RUnlock()
 		if exists {
 			handler()
-			cacheReceivedMessages.WithLabelValues(p.options.Addr).Inc()
+			p.telemetry.IncCachePubSubReceive(p.options.Addr)
 		} else {
 			log.Warnf("No cache_flush_list handler registered for entity: %s\n", entityName)
 		}

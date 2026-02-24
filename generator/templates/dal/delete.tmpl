@@ -16,7 +16,7 @@ func (d *{{$entityArgumentName}}Repository) Delete(ctx context.Context, entity *
 	}
 
 	const operation = "delete"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName }}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
 	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return nil, d.delete(ctx, entity.ID)
@@ -44,19 +44,19 @@ func (d *{{$entityArgumentName}}Repository) delete(ctx context.Context, id int64
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
     if dbErr != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return dbErr
     }
 
 	res, err := db.ExecContext(ctx, query, id)
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return fmt.Errorf("failed to delete {{$entityTableName}}: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -64,8 +64,8 @@ func (d *{{$entityArgumentName}}Repository) delete(ctx context.Context, id int64
 		return ErrNotFound
 	}
 
-	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+	d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
 	return nil
 }
 {{end}}

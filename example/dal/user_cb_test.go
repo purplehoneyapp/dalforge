@@ -35,7 +35,7 @@ func TestCircuitBreaker(t *testing.T) {
 
 	// Instantiate the UserDAL with the failing provider, using NoopCacheProvider and DefaultConfigProvider.
 	failingProvider := FailingDBProvider{}
-	userDAL := NewUserRepository(failingProvider, NoopCacheProvider{}, DefaultConfigProvider{}, settings)
+	userDAL := NewUserRepository(failingProvider, NoopCacheProvider{}, DefaultConfigProvider{}, settings, PrometheusTelemetryProvider{})
 	ctx := context.Background()
 
 	// Call GetByID repeatedly to force failures.
@@ -77,6 +77,7 @@ func TestCircuitBreakerWithErrNotFound(t *testing.T) {
 			nil, // default cache provider
 			nil, // default config provider
 			settings,
+			PrometheusTelemetryProvider{},
 		)
 		ctx := context.Background()
 

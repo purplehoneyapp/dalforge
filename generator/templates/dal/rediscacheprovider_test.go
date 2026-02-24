@@ -48,7 +48,7 @@ func TestRedisCacheProvider(t *testing.T) {
 	t.Logf("Address of redis is: %s", addr)
 
 	// Initialize the provider.
-	provider := NewRedisCacheProvider(addr, "", 0)
+	provider := NewRedisCacheProvider(addr, "", 0, nil)
 	if err := provider.Connect(); err != nil {
 		t.Fatalf("failed to connect to redis: %v", err)
 	}

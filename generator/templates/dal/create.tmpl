@@ -13,8 +13,7 @@ func (d *{{$entityArgumentName}}Repository) Create(ctx context.Context, entity *
 		return nil, fmt.Errorf("{{$entityArgumentName}}Repository.Create failed as ID > 0")
 	}
 
-	const operation = "create"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", "create")
 
 	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return d.create(ctx, entity)
@@ -47,7 +46,7 @@ func (d *{{$entityArgumentName}}Repository) create(ctx context.Context, entity *
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
     if dbErr != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)		
         return nil, dbErr
     }
 
@@ -56,19 +55,19 @@ func (d *{{$entityArgumentName}}Repository) create(ctx context.Context, entity *
 		entity.Created, entity.Updated)
 
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, fmt.Errorf("failed to insert {{$entityStructName}}: %w", err)
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, fmt.Errorf("failed to get last insert ID: %w", err)
 	}
 
-	entity.ID = id
-	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+	entity.ID = id	
+	d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
 	return entity, nil
 }
 {{end}}

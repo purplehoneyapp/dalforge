@@ -85,11 +85,16 @@ type {{$entityArgumentName}}Repository struct {
     cacheProvider       CacheProvider
     configProvider      ConfigProvider
 	dbBreaker           *gobreaker.CircuitBreaker
+    telemetryProvider TelemetryProvider
 }
 
 // New{{$entityStructName}}Repository now returns the {{$entityStructName}}Repository interface.
-func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider CacheProvider,
-    configProvider ConfigProvider, dbSettings gobreaker.Settings) {{$entityStructName}}Repository {
+func New{{$entityStructName}}Repository(
+    provider DBProvider, 
+    cacheProvider CacheProvider,
+    configProvider ConfigProvider, 
+    dbSettings gobreaker.Settings, 
+    telemetry TelemetryProvider) {{$entityStructName}}Repository {
 
     if configProvider == nil {
         configProvider = DefaultConfigProvider{}
@@ -98,6 +103,10 @@ func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider Cache
     if cacheProvider == nil {
         cacheProvider = NoopCacheProvider{}
     }
+
+    if telemetry == nil {
+		telemetry = NoopTelemetryProvider{}
+	}
 
     if dbSettings.Name == "" {
         dbSettings.Name = "{{$entityTableName}}_dal"
@@ -128,6 +137,7 @@ func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider Cache
         cacheProvider:  cacheProvider,
         configProvider: configProvider,
 		dbBreaker:      gobreaker.NewCircuitBreaker(dbSettings),
+        telemetryProvider: telemetry,
     }
 
     // initialize cache invalidation handler

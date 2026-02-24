@@ -9,7 +9,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | pascalCase}}(ctx cont
     }
 
 	const operation = "{{.List.Name | snakeCase}}"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
     cacheKey := {{listCacheKey $entityTableName .List .Root.Columns}}
     val, found := d.listCache.Get(cacheKey)
@@ -38,13 +38,13 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | pascalCase}}(ctx cont
         }
 
         if !missingEntries {
-            dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+            d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)        
             return entities, nil
         }
     }
 
     // Otherwise, it's a cache miss or decode error
-    dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+     d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)       
 
     // 2) Fallback to DB
     result, err := d.dbBreaker.Execute(func() (interface{}, error) {
@@ -85,7 +85,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
     if dbErr != nil {
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, dbErr
     }
 
@@ -99,7 +99,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
     }
 
 	if err != nil {
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, fmt.Errorf("failed to query {{$entityTableName}}s: %w", err)
 	}
 	defer rows.Close()
@@ -115,19 +115,19 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
             &entity.Updated,
 		)
 		if err != nil {
-            dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+            d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 			return nil, fmt.Errorf("failed to scan {{$entityStructName}}: %w", err)
 		}
 		entities = append(entities, &entity)
 	}
 
 	if err = rows.Err(); err != nil {
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())	
 	return entities, nil
 }
 {{end}}

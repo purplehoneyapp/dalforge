@@ -10,7 +10,7 @@ func (d *{{$entityArgumentName}}Repository) CreateBulk(ctx context.Context, enti
 	}
 
 	const operation = "create_bulk"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
 	result, err := d.dbBreaker.Execute(func() (interface{}, error) {
 		return d.createBulk(ctx, entities)
@@ -63,13 +63,13 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
 
 	db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName}}", true)
 	if dbErr != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, dbErr
 	}
 
 	result, err := db.ExecContext(ctx, query, params...)
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return nil, fmt.Errorf("failed to bulk insert {{$entityTableName}}s: %w", err)
 	}
 
@@ -93,8 +93,8 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
 		entities[i].ID = lastID + int64(i)
 	}
 
-	dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+	d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
 	return entities, nil
 }
 {{end}}

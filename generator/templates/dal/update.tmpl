@@ -10,7 +10,7 @@ func (d *{{$entityArgumentName}}Repository) Update(ctx context.Context, entity *
     }
 
 	const operation = "update"
-	dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
 	{{- if gt (len .Root.Operations.Gets) 0 }}
 	// 1. Get existing entity to check for changes. Required for proper cache invalidation.
@@ -58,7 +58,7 @@ func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
     if dbErr != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return dbErr
     }
 
@@ -67,13 +67,13 @@ func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *
 	entity.Updated, entity.ID, entity.Version)
 
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return fmt.Errorf("failed to update {{$entityStructName}}: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *
 		return ErrNotFound
 	}
 
-	dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(start).Seconds())
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
 
 	return nil
 }

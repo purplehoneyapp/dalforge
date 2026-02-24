@@ -9,7 +9,7 @@ func (d *{{$entityArgumentName}}Repository) GetByID(ctx context.Context, id int6
     }
 
     const operation = "get_by_id"
-    dalOperationsTotalCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
 	// Load from cache
     cachedEntity, _ := d.getByIDCached(id)
@@ -43,9 +43,9 @@ func (d *{{$entityArgumentName}}Repository) setCached(entity *{{$entityStructNam
     if itemCount < {{.Caching.MaxItemsCount}} {
         cacheKey := d.getCacheKey(entity.ID)
 
-        // Store in cache with new format
-        dalCacheWritesCounter.WithLabelValues("{{$entityTableName}}").Inc()
-        dalCacheSizeGauge.WithLabelValues("{{$entityTableName}}").Set(float64(itemCount+1))
+        // Store in cache with new format        
+        d.telemetryProvider.IncCacheWrite("{{$entityTableName}}")
+        d.telemetryProvider.SetCacheSize("{{$entityTableName}}", float64(itemCount+1))        
 
         copy := *entity
 		d.cache.Set(cacheKey, &copy, time.Second*{{.Caching.SingleExpirationSeconds}})
@@ -65,13 +65,13 @@ func (d *{{$entityArgumentName}}Repository) getByIDCached(id int64) (*{{$entityS
             return nil, fmt.Errorf("{{$entityArgumentName}}Repository.GetById: Cache returned wrong type")
         }
 
-        dalCacheHitsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)        
         copy := *entity
         return &copy, nil
     }
 
     // Cache missed or error during fetching cached data
-	dalCacheMissesCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+    d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)        	
 
     return nil, nil
 }
@@ -88,7 +88,7 @@ func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int6
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
     if dbErr != nil {
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, dbErr
     }
 
@@ -105,12 +105,12 @@ func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int6
         if errors.Is(err, sql.ErrNoRows) {
             return nil, ErrNotFound
         }
-        dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, fmt.Errorf("failed to get {{$entityStructName}} by ID: %w", err)
     }
 
-    dbRequestsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()
-    dbRequestsLatencyHistogram.WithLabelValues("{{$entityTableName}}", operation).Observe(time.Since(dbStart).Seconds())
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())	
     return &entity, nil
 }
 
