@@ -57,6 +57,7 @@ func generate(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed creating generator %v", err)
 	}
 
+	hadDalFile := false
 	for _, entry := range entries {
 		// Only consider files (ignore directories)
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
@@ -108,13 +109,15 @@ func generate(cmd *cobra.Command, args []string) {
 			}
 
 			fmt.Printf("Generated SQL: %s\n", sqlPath)
+			hadDalFile = true
 		}
 	}
 
-	// MOVED OUTSIDE THE LOOP: Copy shared infrastructure files only once
-	err = gen.CopyOtherFiles(outputDir)
-	if err != nil {
-		log.Fatalf("failed writing shared provider files to path %s, %v", outputDir, err)
+	if hadDalFile {
+		err = gen.CopyOtherFiles(outputDir)
+		if err != nil {
+			log.Fatalf("failed writing shared provider files to path %s, %v", outputDir, err)
+		}
 	}
 }
 

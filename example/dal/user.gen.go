@@ -1073,7 +1073,7 @@ func (d *userRepository) ListByBday(ctx context.Context, birthdate *time.Time, s
 	const operation = "list_by_bday"
 	d.telemetryProvider.IncDALOperation("user", operation)
 
-    cacheKey := fmt.Sprintf("user_list_by_bday:%v:%d:%d", func() interface{} { if birthdate == nil { return "nil" }; return *birthdate }(), startID, pageSize)
+    cacheKey := fmt.Sprintf("user_list_by_bday:%v:%d:%d", func() interface{} { if birthdate == nil { return "<<null>>" }; return *birthdate }(), startID, pageSize)
     val, found := d.listCache.Get(cacheKey)
     if found {
         entityIDs, ok := val.([]int64)
@@ -1341,7 +1341,7 @@ func (d *userRepository) ListByStatus(ctx context.Context, status *string, start
 	const operation = "list_by_status"
 	d.telemetryProvider.IncDALOperation("user", operation)
 
-    cacheKey := fmt.Sprintf("user_list_by_status:%v:%d:%d", func() interface{} { if status == nil { return "nil" }; return *status }(), startID, pageSize)
+    cacheKey := fmt.Sprintf("user_list_by_status:%v:%d:%d", func() interface{} { if status == nil { return "<<null>>" }; return *status }(), startID, pageSize)
     val, found := d.listCache.Get(cacheKey)
     if found {
         entityIDs, ok := val.([]int64)
@@ -1549,7 +1549,7 @@ func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Ti
 	const operation = "count_list_by_bday"
 	d.telemetryProvider.IncDALOperation("user", operation)
 	
-	cacheKey := fmt.Sprintf("user_count_list_by_bday:%v", func() interface{} { if birthdate == nil { return "nil" }; return *birthdate }())
+	cacheKey := fmt.Sprintf("user_count_list_by_bday:%v", func() interface{} { if birthdate == nil { return "<<null>>" }; return *birthdate }())
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)
@@ -1695,7 +1695,7 @@ func (d *userRepository) CountListByStatus(ctx context.Context, status *string) 
 	const operation = "count_list_by_status"
 	d.telemetryProvider.IncDALOperation("user", operation)
 	
-	cacheKey := fmt.Sprintf("user_count_list_by_status:%v", func() interface{} { if status == nil { return "nil" }; return *status }())
+	cacheKey := fmt.Sprintf("user_count_list_by_status:%v", func() interface{} { if status == nil { return "<<null>>" }; return *status }())
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)

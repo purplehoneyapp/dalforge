@@ -15,8 +15,8 @@ CREATE UNIQUE INDEX idx_email ON users (email);
 CREATE UNIQUE INDEX idx_uuid ON users (uuid);
 
 # Indexes that serve all the list operations
+CREATE INDEX idx_age ON users (age);
 CREATE INDEX idx_created ON users (created);
 CREATE INDEX idx_status ON users (status);
 CREATE INDEX idx_birthdate ON users (birthdate);
-CREATE INDEX idx_age ON users (age);
 
