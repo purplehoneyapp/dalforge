@@ -54,7 +54,7 @@ type PostRepository interface {
     ListById(ctx context.Context, startID int64, pageSize int) ([]*Post, error)
     CountListById(ctx context.Context, ) (int64, error)
     RecentPosts(ctx context.Context, targetAge int8, startID int64, pageSize int) ([]*Post, error)
-    CountRecentPosts(ctx context.Context, targetAge int8, ) (int64, error)
+    CountRecentPosts(ctx context.Context, targetAge int8) (int64, error)
 }
 
 type postRepository struct {
@@ -1033,7 +1033,7 @@ func (d *postRepository) countListById(ctx context.Context, ) (int64, error) {
 
 
 // Count function for the specific list
-func (d *postRepository) CountRecentPosts(ctx context.Context, targetAge int8, ) (int64, error) {
+func (d *postRepository) CountRecentPosts(ctx context.Context, targetAge int8) (int64, error) {
 	if d.configProvider.BlockedReads("post") {
 		return 0, ErrOperationBlocked
 	}
@@ -1041,7 +1041,7 @@ func (d *postRepository) CountRecentPosts(ctx context.Context, targetAge int8, )
 	const operation = "count_recent_posts"
 	d.telemetryProvider.IncDALOperation("post", operation)
 	
-	cacheKey := fmt.Sprintf("post_count_recent_posts:%v", targetAge, )
+	cacheKey := fmt.Sprintf("post_count_recent_posts:%v", targetAge)
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)
@@ -1058,7 +1058,7 @@ func (d *postRepository) CountRecentPosts(ctx context.Context, targetAge int8, )
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.countRecentPosts(ctx, targetAge, )
+		return d.countRecentPosts(ctx, targetAge)
 	})
 
 	if err != nil {
@@ -1071,7 +1071,7 @@ func (d *postRepository) CountRecentPosts(ctx context.Context, targetAge int8, )
 	return count.(int64), nil
 }
 
-func (d *postRepository) countRecentPosts(ctx context.Context, targetAge int8, ) (int64, error) {
+func (d *postRepository) countRecentPosts(ctx context.Context, targetAge int8) (int64, error) {
 	const operation = "count_recent_posts"
 	dbStart := time.Now()
 
@@ -1087,7 +1087,7 @@ func (d *postRepository) countRecentPosts(ctx context.Context, targetAge int8, )
 	var err error
 	var count int64
 
-	row := db.QueryRowContext(ctx, query, targetAge, )
+	row := db.QueryRowContext(ctx, query, targetAge)
 
 	err = row.Scan(
 		&count,

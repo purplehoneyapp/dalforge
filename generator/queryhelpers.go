@@ -189,7 +189,8 @@ func countQueryParams(list ListConfig, columns map[string]Column) string {
 		result += fmt.Sprintf("%s, ", CamelCaser(param))
 	}
 
-	return result
+	// Clean up the trailing comma and space
+	return strings.TrimSuffix(result, ", ")
 }
 
 // for input:
@@ -226,13 +227,13 @@ func countFuncParams(list ListConfig, columns map[string]Column) (string, error)
 		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
 	}
 
-	return result, nil
+	// Clean up the trailing comma and space
+	return strings.TrimSuffix(result, ", "), nil
 }
 
 // Create cache key similar to this:
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v:%d:%d", age, startID, pageSize)
 func listCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
-	result := ""
 	key := fmt.Sprintf("%s_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
 	params := extractParams(list.Where)
 	for range params {
@@ -240,25 +241,53 @@ func listCacheKey(entityName string, list ListConfig, columns map[string]Column)
 	}
 	key += ":%d:%d"
 
-	result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, listQueryParams(false, list, columns))
-	return result
+	paramStr := ""
+	for _, param := range params {
+		col := columns[param]
+		goName := CamelCaser(param)
+
+		// If the column allows nulls, it's a pointer in Go.
+		// We generate an inline function to safely dereference it or return "nil".
+		if col.AllowNull {
+			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "nil" }; return *%s }(), `, goName, goName)
+		} else {
+			paramStr += fmt.Sprintf("%s, ", goName)
+		}
+	}
+
+	// listQueryParams always appends startID and pageSize, so trailing comma is safe here
+	paramStr += "startID, pageSize"
+
+	return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 }
 
 // Create cache key similar to this:
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v", age)
 func countCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
-	result := ""
 	key := fmt.Sprintf("%s_count_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
 	params := extractParams(list.Where)
 	for range params {
 		key += ":%v"
 	}
 
-	queryParams := countQueryParams(list, columns)
-	if queryParams == "" {
-		result = fmt.Sprintf(`fmt.Sprintf("%s")`, key)
-	} else {
-		result = fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, queryParams)
+	paramStr := ""
+	for _, param := range params {
+		col := columns[param]
+		goName := CamelCaser(param)
+
+		if col.AllowNull {
+			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "nil" }; return *%s }(), `, goName, goName)
+		} else {
+			paramStr += fmt.Sprintf("%s, ", goName)
+		}
 	}
-	return result
+
+	// Clean up trailing comma since count queries don't have pagination parameters at the end
+	paramStr = strings.TrimSuffix(paramStr, ", ")
+
+	if paramStr == "" {
+		return fmt.Sprintf(`fmt.Sprintf("%s")`, key)
+	} else {
+		return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
+	}
 }

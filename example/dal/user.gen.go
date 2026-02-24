@@ -58,11 +58,11 @@ type UserRepository interface {
     ListById(ctx context.Context, startID int64, pageSize int) ([]*User, error)
     CountListById(ctx context.Context, ) (int64, error)
     ListByBday(ctx context.Context, birthdate *time.Time, startID int64, pageSize int) ([]*User, error)
-    CountListByBday(ctx context.Context, birthdate *time.Time, ) (int64, error)
+    CountListByBday(ctx context.Context, birthdate *time.Time) (int64, error)
     ListByAge(ctx context.Context, age int8, startID int64, pageSize int) ([]*User, error)
-    CountListByAge(ctx context.Context, age int8, ) (int64, error)
+    CountListByAge(ctx context.Context, age int8) (int64, error)
     ListByStatus(ctx context.Context, status *string, startID int64, pageSize int) ([]*User, error)
-    CountListByStatus(ctx context.Context, status *string, ) (int64, error)
+    CountListByStatus(ctx context.Context, status *string) (int64, error)
 }
 
 type userRepository struct {
@@ -1052,7 +1052,7 @@ func (d *userRepository) ListByBday(ctx context.Context, birthdate *time.Time, s
 	const operation = "list_by_bday"
 	d.telemetryProvider.IncDALOperation("user", operation)
 
-    cacheKey := fmt.Sprintf("user_list_by_bday:%v:%d:%d", birthdate, startID, pageSize)
+    cacheKey := fmt.Sprintf("user_list_by_bday:%v:%d:%d", func() interface{} { if birthdate == nil { return "nil" }; return *birthdate }(), startID, pageSize)
     val, found := d.listCache.Get(cacheKey)
     if found {
         entityIDs, ok := val.([]int64)
@@ -1320,7 +1320,7 @@ func (d *userRepository) ListByStatus(ctx context.Context, status *string, start
 	const operation = "list_by_status"
 	d.telemetryProvider.IncDALOperation("user", operation)
 
-    cacheKey := fmt.Sprintf("user_list_by_status:%v:%d:%d", status, startID, pageSize)
+    cacheKey := fmt.Sprintf("user_list_by_status:%v:%d:%d", func() interface{} { if status == nil { return "nil" }; return *status }(), startID, pageSize)
     val, found := d.listCache.Get(cacheKey)
     if found {
         entityIDs, ok := val.([]int64)
@@ -1520,7 +1520,7 @@ func (d *userRepository) countListById(ctx context.Context, ) (int64, error) {
 
 
 // Count function for the specific list
-func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Time, ) (int64, error) {
+func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Time) (int64, error) {
 	if d.configProvider.BlockedReads("user") {
 		return 0, ErrOperationBlocked
 	}
@@ -1528,7 +1528,7 @@ func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Ti
 	const operation = "count_list_by_bday"
 	d.telemetryProvider.IncDALOperation("user", operation)
 	
-	cacheKey := fmt.Sprintf("user_count_list_by_bday:%v", birthdate, )
+	cacheKey := fmt.Sprintf("user_count_list_by_bday:%v", func() interface{} { if birthdate == nil { return "nil" }; return *birthdate }())
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)
@@ -1545,7 +1545,7 @@ func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Ti
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.countListByBday(ctx, birthdate, )
+		return d.countListByBday(ctx, birthdate)
 	})
 
 	if err != nil {
@@ -1558,7 +1558,7 @@ func (d *userRepository) CountListByBday(ctx context.Context, birthdate *time.Ti
 	return count.(int64), nil
 }
 
-func (d *userRepository) countListByBday(ctx context.Context, birthdate *time.Time, ) (int64, error) {
+func (d *userRepository) countListByBday(ctx context.Context, birthdate *time.Time) (int64, error) {
 	const operation = "count_list_by_bday"
 	dbStart := time.Now()
 
@@ -1574,7 +1574,7 @@ func (d *userRepository) countListByBday(ctx context.Context, birthdate *time.Ti
 	var err error
 	var count int64
 
-	row := db.QueryRowContext(ctx, query, birthdate, )
+	row := db.QueryRowContext(ctx, query, birthdate)
 
 	err = row.Scan(
 		&count,
@@ -1593,7 +1593,7 @@ func (d *userRepository) countListByBday(ctx context.Context, birthdate *time.Ti
 
 
 // Count function for the specific list
-func (d *userRepository) CountListByAge(ctx context.Context, age int8, ) (int64, error) {
+func (d *userRepository) CountListByAge(ctx context.Context, age int8) (int64, error) {
 	if d.configProvider.BlockedReads("user") {
 		return 0, ErrOperationBlocked
 	}
@@ -1601,7 +1601,7 @@ func (d *userRepository) CountListByAge(ctx context.Context, age int8, ) (int64,
 	const operation = "count_list_by_age"
 	d.telemetryProvider.IncDALOperation("user", operation)
 	
-	cacheKey := fmt.Sprintf("user_count_list_by_age:%v", age, )
+	cacheKey := fmt.Sprintf("user_count_list_by_age:%v", age)
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)
@@ -1618,7 +1618,7 @@ func (d *userRepository) CountListByAge(ctx context.Context, age int8, ) (int64,
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.countListByAge(ctx, age, )
+		return d.countListByAge(ctx, age)
 	})
 
 	if err != nil {
@@ -1631,7 +1631,7 @@ func (d *userRepository) CountListByAge(ctx context.Context, age int8, ) (int64,
 	return count.(int64), nil
 }
 
-func (d *userRepository) countListByAge(ctx context.Context, age int8, ) (int64, error) {
+func (d *userRepository) countListByAge(ctx context.Context, age int8) (int64, error) {
 	const operation = "count_list_by_age"
 	dbStart := time.Now()
 
@@ -1647,7 +1647,7 @@ func (d *userRepository) countListByAge(ctx context.Context, age int8, ) (int64,
 	var err error
 	var count int64
 
-	row := db.QueryRowContext(ctx, query, age, )
+	row := db.QueryRowContext(ctx, query, age)
 
 	err = row.Scan(
 		&count,
@@ -1666,7 +1666,7 @@ func (d *userRepository) countListByAge(ctx context.Context, age int8, ) (int64,
 
 
 // Count function for the specific list
-func (d *userRepository) CountListByStatus(ctx context.Context, status *string, ) (int64, error) {
+func (d *userRepository) CountListByStatus(ctx context.Context, status *string) (int64, error) {
 	if d.configProvider.BlockedReads("user") {
 		return 0, ErrOperationBlocked
 	}
@@ -1674,7 +1674,7 @@ func (d *userRepository) CountListByStatus(ctx context.Context, status *string, 
 	const operation = "count_list_by_status"
 	d.telemetryProvider.IncDALOperation("user", operation)
 	
-	cacheKey := fmt.Sprintf("user_count_list_by_status:%v", status, )
+	cacheKey := fmt.Sprintf("user_count_list_by_status:%v", func() interface{} { if status == nil { return "nil" }; return *status }())
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)
@@ -1691,7 +1691,7 @@ func (d *userRepository) CountListByStatus(ctx context.Context, status *string, 
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.countListByStatus(ctx, status, )
+		return d.countListByStatus(ctx, status)
 	})
 
 	if err != nil {
@@ -1704,7 +1704,7 @@ func (d *userRepository) CountListByStatus(ctx context.Context, status *string, 
 	return count.(int64), nil
 }
 
-func (d *userRepository) countListByStatus(ctx context.Context, status *string, ) (int64, error) {
+func (d *userRepository) countListByStatus(ctx context.Context, status *string) (int64, error) {
 	const operation = "count_list_by_status"
 	dbStart := time.Now()
 
@@ -1720,7 +1720,7 @@ func (d *userRepository) countListByStatus(ctx context.Context, status *string, 
 	var err error
 	var count int64
 
-	row := db.QueryRowContext(ctx, query, status, )
+	row := db.QueryRowContext(ctx, query, status)
 
 	err = row.Scan(
 		&count,
