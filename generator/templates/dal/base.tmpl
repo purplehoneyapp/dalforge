@@ -28,14 +28,16 @@ func init() {
 	gob.Register({{$entityStructName}}{})
 }
 
+// Struct representing {{$entityStructName}}. Do not use these structs directly across services as this struct carries db specific information.
+// recommendation: create higher level service layer structs that might look same or very similar instead.
 type {{$entityStructName}} struct {
-    ID        int64
-    version   int32
+    ID        int64 `json:"id"` // Auto-incremented number
+    Version   int32 `json:"version"` // Only change this value directly in very specific cases.  
     {{range $colName, $col := .Columns}}
     {{$colName | pascalCase}} {{toGoType $col.Type .AllowNull}} `json:"{{$colName | snakeCase}}"`{{end}}
 
-    Created   time.Time
-    Updated   time.Time
+    Created   time.Time `json:"created"`
+    Updated   time.Time `json:"updated"`
 }
 
 // {{$entityStructName}}Repository defines the interface for the {{$entityStructName}}.

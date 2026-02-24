@@ -109,7 +109,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
 		var entity {{$entityStructName}}
 		err := rows.Scan(
 			&entity.ID,
-            &entity.version,
+            &entity.Version,
             {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
             {{end}}{{end}}&entity.Created,
             &entity.Updated,

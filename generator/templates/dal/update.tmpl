@@ -37,7 +37,7 @@ func (d *{{$entityArgumentName}}Repository) Update(ctx context.Context, entity *
 	d.InvalidateCache(entity)
 	d.FlushListCache()
 
-	entity.version++
+	entity.Version++
 	// our entity can become part of local cache
 	d.setCached(entity)
 
@@ -64,7 +64,7 @@ func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *
 
 	res, err := db.ExecContext(ctx, query,
     {{- goFuncCallParameters "entity" .Root.Columns }},
-	entity.Updated, entity.ID, entity.version)
+	entity.Updated, entity.ID, entity.Version)
 
 	if err != nil {
 		dbRequestsErrorsCounter.WithLabelValues("{{$entityTableName}}", operation).Inc()

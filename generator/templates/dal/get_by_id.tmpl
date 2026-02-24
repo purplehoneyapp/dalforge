@@ -96,7 +96,7 @@ func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int6
     var entity {{$entityStructName}}
     err := row.Scan(
         &entity.ID,
-        &entity.version,
+        &entity.Version,
         {{- range $colName, $col := .Columns}}&entity.{{$colName | pascalCase}},{{- end}}
         &entity.Created,
         &entity.Updated,

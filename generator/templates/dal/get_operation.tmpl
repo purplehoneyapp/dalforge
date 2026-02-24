@@ -68,7 +68,7 @@ func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ct
     var entity {{$entityStructName}}
     err := row.Scan(
         &entity.ID,
-        &entity.version,
+        &entity.Version,
         {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
         {{end}}{{end}}&entity.Created,
         &entity.Updated,

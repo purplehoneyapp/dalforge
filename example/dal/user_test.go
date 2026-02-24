@@ -687,6 +687,6 @@ func TestOptimisticLocking(t *testing.T) {
 		// new version should be higher than created
 		retrieved, err := userDAL.GetByID(ctx, created.ID)
 		assert.NoError(t, err)
-		assert.Greater(t, retrieved.version, created.version)
+		assert.Greater(t, retrieved.Version, created.Version)
 	})
 }
