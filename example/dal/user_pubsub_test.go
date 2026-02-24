@@ -73,7 +73,7 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 		fakeCacheProv := NewFakeCacheProvider()
 
 		// Initialize DAL with the fake cache provider.
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			fakeCacheProv,
 			nil, // Use default config provider
@@ -166,8 +166,8 @@ func TestRedisPubSubInvalidationBetweenInstances(t *testing.T) {
 	defer teardownTestDB(t)
 
 	// Create two separate UserDAL instances using the same DBProvider but different cache providers.
-	userDAL_A := NewUserDAL(dbProvider, redisCacheProvA, nil, gobreaker.Settings{})
-	userDAL_B := NewUserDAL(dbProvider, redisCacheProvB, nil, gobreaker.Settings{})
+	userDAL_A := NewUserRepository(dbProvider, redisCacheProvA, nil, gobreaker.Settings{})
+	userDAL_B := NewUserRepository(dbProvider, redisCacheProvB, nil, gobreaker.Settings{})
 
 	// Give the subscriptions some time to initialize.
 	time.Sleep(3 * time.Second)

@@ -85,8 +85,8 @@ type {{$entityStructName}}DAL struct {
 	dbBreaker           *gobreaker.CircuitBreaker
 }
 
-// New{{$entityStructName}}DAL now returns the {{$entityStructName}}Repository interface.
-func New{{$entityStructName}}DAL(provider DBProvider, cacheProvider CacheProvider,
+// New{{$entityStructName}}Repository now returns the {{$entityStructName}}Repository interface.
+func New{{$entityStructName}}Repository(provider DBProvider, cacheProvider CacheProvider,
     configProvider ConfigProvider, dbSettings gobreaker.Settings) {{$entityStructName}}Repository {
 
     if configProvider == nil {

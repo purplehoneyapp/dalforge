@@ -177,7 +177,7 @@ func TestUserCRUD(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize DAL
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
@@ -256,7 +256,7 @@ func TestUserCreateBulk(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize DAL
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
@@ -322,7 +322,7 @@ func TestUserBlockedReadsAndWrites(t *testing.T) {
 
 		configProvider := AlwaysBlockingConfigProvider{}
 		// Initialize DAL
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil,            // cache provider (mock if needed)
 			configProvider, // config provider (mock if needed)
@@ -363,7 +363,7 @@ func TestUserGetEmail(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize DAL
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
@@ -442,7 +442,7 @@ func TestListById(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize DAL
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (mock if needed)
 			nil, // config provider (mock if needed)
@@ -523,7 +523,7 @@ func TestListByIdCachingAndInvalidation(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize the DAL with default providers (will use NoopCacheProvider and DefaultConfigProvider if nil).
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (default if nil)
 			nil, // config provider (default if nil)
@@ -592,7 +592,7 @@ func TestListByBday(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize the DAL with default cache and config providers.
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // cache provider (defaults to NoopCacheProvider if nil)
 			nil, // config provider (defaults to DefaultConfigProvider if nil)
@@ -649,7 +649,7 @@ func TestOptimisticLocking(t *testing.T) {
 		defer teardownTestDB(t)
 
 		// Initialize DAL with default providers.
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // default cache provider
 			nil, // default config provider

@@ -35,7 +35,7 @@ func TestCircuitBreaker(t *testing.T) {
 
 	// Instantiate the UserDAL with the failing provider, using NoopCacheProvider and DefaultConfigProvider.
 	failingProvider := FailingDBProvider{}
-	userDAL := NewUserDAL(failingProvider, NoopCacheProvider{}, DefaultConfigProvider{}, settings)
+	userDAL := NewUserRepository(failingProvider, NoopCacheProvider{}, DefaultConfigProvider{}, settings)
 	ctx := context.Background()
 
 	// Call GetByID repeatedly to force failures.
@@ -72,7 +72,7 @@ func TestCircuitBreakerWithErrNotFound(t *testing.T) {
 		}
 
 		// Initialize DAL with default providers.
-		userDAL := NewUserDAL(
+		userDAL := NewUserRepository(
 			dbProvider,
 			nil, // default cache provider
 			nil, // default config provider
