@@ -9,7 +9,7 @@ const path = require('path');
 
 // 1. Files/Folders to concatenate into 'bigapi-context.md'
 const CONTENT_TARGETS = [
-  'dal-instructions.md',
+  'instructions-template.md',
   'example/user.yaml',
   'example/post.yaml',
   'example/dal/serverprovider.gen.go',
