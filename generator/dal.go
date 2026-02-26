@@ -179,6 +179,7 @@ type Column struct {
 	Type      string `yaml:"type"`
 	AllowNull bool   `yaml:"allowNull"`
 	Unique    bool   `yaml:"unique"`
+	Prefix    string `yaml:"prefix"` //
 }
 
 type OperationConfig struct {

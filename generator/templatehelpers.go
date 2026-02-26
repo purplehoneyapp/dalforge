@@ -89,7 +89,7 @@ func toGoType(yamlType string, allowNull bool) string {
 			return "*float"
 		}
 		return "float64"
-	case "uuid":
+	case "uid":
 		if allowNull {
 			return "*string"
 		}
@@ -141,8 +141,8 @@ func toSQLType(yamlType string) string {
 		return "TIME"
 	case "datetime":
 		return "DATETIME"
-	case "uuid":
-		return "CHAR(36)"
+	case "uid":
+		return "VARCHAR(50)"
 	default:
 		return "TEXT" // Fallback for unknown types
 	}

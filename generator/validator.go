@@ -80,7 +80,7 @@ func validateColumns(columns map[string]Column) []string {
 		"date":     true,
 		"time":     true,
 		"datetime": true,
-		"uuid":     true,
+		"uid":      true,
 	}
 
 	for colName, col := range columns {
@@ -92,6 +92,15 @@ func validateColumns(columns map[string]Column) []string {
 		}
 		if !allowedTypes[col.Type] {
 			errs = append(errs, fmt.Sprintf("column '%s' has unsupported type '%s'", colName, col.Type))
+		}
+
+		// New validation rule for uid prefixes
+		if col.Type == "uid" {
+			if strings.TrimSpace(col.Prefix) == "" {
+				errs = append(errs, fmt.Sprintf("column '%s' of type 'uid' requires a non-empty 'prefix'", colName))
+			} else if !isSnakeCase(col.Prefix) {
+				errs = append(errs, fmt.Sprintf("prefix '%s' for column '%s' must be in snake_case", col.Prefix, colName))
+			}
 		}
 	}
 	return errs

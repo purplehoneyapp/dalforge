@@ -66,6 +66,15 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
             entity.Created = now
             entity.Updated = now
 
+			// Auto-generate UID fields if they are not provided
+			{{- range $colName, $col := .Root.Columns }}
+			{{- if eq $col.Type "uid" }}
+			if entity.{{ $colName | pascalCase }} == "" {
+				entity.{{ $colName | pascalCase }} = GenerateUID("{{ $col.Prefix }}")
+			}
+			{{- end }}
+			{{- end }}
+
             valuePlaceholders = append(valuePlaceholders, "({{- range $index, $colName := keys .Root.Columns -}}?,{{- end }}?,?)")
             params = append(params,
                 {{- range $colName, $col := .Root.Columns}}

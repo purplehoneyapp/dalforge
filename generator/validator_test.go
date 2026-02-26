@@ -10,13 +10,14 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 		Name:    "user", // snake_case, >3 chars
 		Version: "v1",   // non-empty and valid format
 		Columns: map[string]Column{
-			"id":      {Type: "int64", AllowNull: false, Unique: true},
-			"email":   {Type: "varchar", AllowNull: false, Unique: true},
-			"created": {Type: "datetime", AllowNull: false, Unique: false},
-			"updated": {Type: "datetime", AllowNull: false, Unique: false},
+			"id":        {Type: "int64", AllowNull: false, Unique: true},
+			"public_id": {Type: "uid", Prefix: "user", AllowNull: false, Unique: true}, // testing valid uid
+			"email":     {Type: "varchar", AllowNull: false, Unique: true},
+			"created":   {Type: "datetime", AllowNull: false, Unique: false},
+			"updated":   {Type: "datetime", AllowNull: false, Unique: false},
 		},
 		Operations: OperationConfig{
-			Gets: []string{"id", "email"},
+			Gets: []string{"id", "email", "public_id"},
 			Lists: []ListConfig{
 				{
 					Name:       "user_list",
@@ -52,10 +53,13 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		Name:    "User", // not snake_case
 		Version: "",     // empty version (error)
 		Columns: map[string]Column{
-			"id":        {Type: "int64", AllowNull: false, Unique: true},
-			"email":     {Type: "varchar", AllowNull: false, Unique: false}, // error: used in gets but not unique
-			"firstName": {Type: "varchar", AllowNull: false, Unique: false}, // error: not snake_case
-			"invalid":   {Type: "unknown", AllowNull: false, Unique: false}, // error: unsupported type
+			"id":             {Type: "int64", AllowNull: false, Unique: true},
+			"email":          {Type: "varchar", AllowNull: false, Unique: false},                    // error: used in gets but not unique
+			"firstName":      {Type: "varchar", AllowNull: false, Unique: false},                    // error: not snake_case
+			"invalid":        {Type: "unknown", AllowNull: false, Unique: false},                    // error: unsupported type
+			"legacy_uuid":    {Type: "uuid", AllowNull: false, Unique: false},                       // error: uuid is no longer supported
+			"missing_prefix": {Type: "uid", Prefix: "", AllowNull: false, Unique: false},            // error: uid requires a prefix
+			"bad_prefix":     {Type: "uid", Prefix: "User Prefix", AllowNull: false, Unique: false}, // error: prefix must be snake_case
 		},
 		Operations: OperationConfig{
 			Gets: []string{"id", "email", "non_existent"}, // non_existent: error; email: error due to not unique.
@@ -100,6 +104,9 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		"version cannot be empty",
 		"column name 'firstName' must be in snake_case",
 		"column 'invalid' has unsupported type 'unknown'",
+		"column 'legacy_uuid' has unsupported type 'uuid'",                    // Tests the removal of legacy uuid
+		"column 'missing_prefix' of type 'uid' requires a non-empty 'prefix'", // Tests missing prefix
+		"prefix 'User Prefix' for column 'bad_prefix' must be in snake_case",  // Tests malformed prefix
 		"get operation refers to unknown column 'non_existent'",
 		"get operation requires column 'email' to be unique",
 		"list name 'lst' must be longer than 4 characters",

@@ -38,6 +38,15 @@ func (d *{{$entityArgumentName}}Repository) create(ctx context.Context, entity *
 	now := time.Now().Truncate(time.Second)
 	entity.Created = now
 	entity.Updated = now
+	
+	// Auto-generate UID fields if they are not provided
+    {{- range $colName, $col := .Root.Columns }}
+    {{- if eq $col.Type "uid" }}
+    if entity.{{ $colName | pascalCase }} == "" {
+        entity.{{ $colName | pascalCase }} = GenerateUID("{{ $col.Prefix }}")
+    }
+    {{- end }}
+    {{- end }}
 
 	query := `
 		INSERT INTO {{$entityTableName}}s ({{- template "comma_separated_columns" .Root.Columns}}created,updated)

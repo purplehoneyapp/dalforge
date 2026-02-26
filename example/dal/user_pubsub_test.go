@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sony/gobreaker"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
@@ -87,7 +86,6 @@ func TestPubSubCacheInvalidation(t *testing.T) {
 		newUser := &User{
 			Age:       25,
 			Email:     "pubsub_test@example.com",
-			Uuid:      uuid.New().String(),
 			Status:    &s,
 			Birthdate: &now,
 		}
@@ -178,7 +176,6 @@ func TestRedisPubSubInvalidationBetweenInstances(t *testing.T) {
 	newUser := &User{
 		Age:       25,
 		Email:     "instance_test@example.com",
-		Uuid:      uuid.New().String(),
 		Status:    Ptr("active"),
 		Birthdate: Ptr(time.Now()),
 	}

@@ -2,10 +2,11 @@ name: user  # entity name, should be singular, snake cased.
 version: v1
 columns:
   status:
-    type: varchar # supported types are: int8, int32, int64, bool, varchar, text, float, date, time, datetime, uuid
+    type: varchar # supported types are: int8, int32, int64, bool, varchar, text, float, date, time, datetime, uid
     allowNull: true
-  uuid:
-    type: uuid
+  uid:
+    type: uid
+    prefix: user
     unique: true
   email:
     type: varchar
@@ -21,7 +22,7 @@ operations:
   delete: true  # if true it will generate delete functions
   gets:
     - email   # put a column name here; it will generate GetByEmail function. The intention is that those columns are unique values.
-    - uuid
+    - uid
   lists:
     - name: list_by_id                 # name of a function that will fetch multiple rows with pagination supported. This should be snake cased and have a name that sounds like multiple results are expected.
     - name: list_by_bday

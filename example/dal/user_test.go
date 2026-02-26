@@ -191,7 +191,6 @@ func TestUserCRUD(t *testing.T) {
 		newUser := &User{
 			Age:       25,
 			Email:     "test@example.com",
-			Uuid:      uuid.New().String(),
 			Status:    Ptr("active"),
 			Birthdate: Ptr(time.Now()),
 		}
@@ -199,6 +198,7 @@ func TestUserCRUD(t *testing.T) {
 		created, err := userDAL.Create(ctx, newUser)
 		assert.NoError(t, err)
 		assert.NotZero(t, created.ID)
+		assert.NotZero(t, created.Uid)
 
 		// Assert that the create operation telemetry counter has increased.
 		createCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "create"))
@@ -275,7 +275,6 @@ func TestUserCreateBulk(t *testing.T) {
 			newUser := &User{
 				Age:       25,
 				Email:     fmt.Sprintf("test_%02d@example.com", i),
-				Uuid:      uuid.New().String(),
 				Status:    Ptr("active"),
 				Birthdate: Ptr(time.Now()),
 			}
@@ -293,6 +292,7 @@ func TestUserCreateBulk(t *testing.T) {
 		// assert we got all the IDs
 		for _, user := range users {
 			assert.Greater(t, user.ID, int64(0))
+			assert.NotZero(t, user.Uid)
 		}
 
 		// --- Test GetByID ---
@@ -338,7 +338,6 @@ func TestUserBlockedReadsAndWrites(t *testing.T) {
 		newUser := &User{
 			Age:       25,
 			Email:     "test@example.com",
-			Uuid:      uuid.New().String(),
 			Status:    Ptr("active"),
 			Birthdate: Ptr(time.Now()),
 		}
@@ -380,7 +379,6 @@ func TestUserGetEmail(t *testing.T) {
 		newUser := &User{
 			Age:       25,
 			Email:     "test@example.com",
-			Uuid:      uuid.New().String(),
 			Status:    Ptr("active"),
 			Birthdate: Ptr(time.Now()),
 		}
@@ -463,7 +461,6 @@ func TestListById(t *testing.T) {
 			newUser := &User{
 				Age:       25,
 				Email:     fmt.Sprintf("test_%d@example.com", i),
-				Uuid:      uuid.New().String(),
 				Status:    Ptr("active"),
 				Birthdate: Ptr(time.Now()),
 			}
@@ -544,7 +541,6 @@ func TestListByIdCachingAndInvalidation(t *testing.T) {
 			newUser := &User{
 				Age:       25,
 				Email:     fmt.Sprintf("cache_test_%d@example.com", i),
-				Uuid:      uuid.New().String(),
 				Status:    Ptr("active"),
 				Birthdate: Ptr(time.Now()),
 			}
@@ -613,7 +609,6 @@ func TestListByBday(t *testing.T) {
 			newUser := &User{
 				Age:       30,
 				Email:     fmt.Sprintf("user_%02d@example.com", month),
-				Uuid:      uuid.New().String(),
 				Status:    Ptr("active"),
 				Birthdate: &birthdate,
 			}
@@ -669,7 +664,6 @@ func TestOptimisticLocking(t *testing.T) {
 		newUser := &User{
 			Age:       25,
 			Email:     "optimistic@example.com",
-			Uuid:      uuid.New().String(),
 			Status:    Ptr("active"),
 			Birthdate: Ptr(time.Now()),
 		}

@@ -26,7 +26,7 @@ func (d *{{$entityArgumentName}}Repository) Store(ctx context.Context, entity *{
         if existing == nil && entity.{{$colName | pascalCase}} != nil {
             existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
         }
-        {{- else if eq $col.Type "varchar" "uuid" "string" "text" }}
+        {{- else if eq $col.Type "varchar" "uid" "string" "text" }}
         if existing == nil && entity.{{$colName | pascalCase}} != "" {
             existing, _ = d.GetBy{{$colName | pascalCase}}(ctx, entity.{{$colName | pascalCase}})
         }
