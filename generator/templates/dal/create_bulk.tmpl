@@ -68,7 +68,7 @@ func (d *{{$entityArgumentName}}Repository) createBulk(ctx context.Context, enti
 
 			// Auto-generate UID fields if they are not provided
 			{{- range $colName, $col := .Root.Columns }}
-			{{- if eq $col.Type "uid" }}
+			 {{- if and (eq $col.Type "uid") $col.Unique }}
 			if entity.{{ $colName | pascalCase }} == "" {
 				entity.{{ $colName | pascalCase }} = GenerateUID("{{ $col.Prefix }}")
 			}
