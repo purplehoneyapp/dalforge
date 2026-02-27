@@ -95,7 +95,7 @@ func validateColumns(columns map[string]Column) []string {
 		}
 
 		// New validation rule for uid prefixes
-		if col.Type == "uid" {
+		if col.Type == "uid" && col.Unique {
 			if strings.TrimSpace(col.Prefix) == "" {
 				errs = append(errs, fmt.Sprintf("column '%s' of type 'uid' requires a non-empty 'prefix'", colName))
 			} else if !isSnakeCase(col.Prefix) {
