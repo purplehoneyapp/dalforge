@@ -44,6 +44,23 @@ func extractParams(input string) []string {
 	return params
 }
 
+// extractUniqueParams returns a deduplicated list of parameters while preserving order.
+// This is used for generating Go function signatures and Cache keys.
+func extractUniqueParams(input string) []string {
+	params := extractParams(input)
+	var unique []string
+	seen := make(map[string]bool)
+
+	for _, param := range params {
+		if !seen[param] {
+			seen[param] = true
+			unique = append(unique, param)
+		}
+	}
+
+	return unique
+}
+
 // replaceParams replaces all named parameters (e.g., :target) with "?" for SQL placeholders.
 func replaceParams(query string) string {
 	re := regexp.MustCompile(`:(\w+)`)
@@ -179,6 +196,26 @@ func listQueryParams(isStartIdZero bool, list ListConfig, columns map[string]Col
 }
 
 // Outputs string that is used for this:
+// d.Somefunction(ctx, {{listFuncCallParams .List}})
+// should created something like this as output:
+// d.Somefunction(ctx, query, startID, age, pageSize)
+func listFuncCallParams(isStartIdZero bool, list ListConfig, columns map[string]Column) string {
+	result := ""
+	params := extractUniqueParams(list.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+
+	if !isStartIdZero {
+		result += "startID, pageSize"
+	} else {
+		result += "pageSize"
+	}
+
+	return result
+}
+
+// Outputs string that is used for this:
 // rows, err := db.QueryContext(ctx, query, {{countQueryParams .List}})
 // should created something like this as output:
 // rows, err := db.QueryContext(ctx, query, age)
@@ -193,26 +230,38 @@ func countQueryParams(list ListConfig, columns map[string]Column) string {
 	return strings.TrimSuffix(result, ", ")
 }
 
+// Outputs string that is used for this:
+// d.FuncCall(ctx, {{countFuncCallParams .List}})
+// should created something like this as output:
+// d.FuncCall(ctx, age, userID)
+func countFuncCallParams(list ListConfig, columns map[string]Column) string {
+	result := ""
+	params := extractUniqueParams(list.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+
+	// Clean up the trailing comma and space
+	return strings.TrimSuffix(result, ", ")
+}
+
 // for input:
 // func (d *UserDAL) listByAge(ctx context.Context, {{listFuncParams .List .Root.Columns}}) ([]*User, error) {
 // outputs:
 // func (d *UserDAL) listByAge(ctx context.Context, age int, startID int64, pageSize int) ([]*User, error) {
 func listFuncParams(list ListConfig, columns map[string]Column) (string, error) {
 	result := ""
-	params := extractParams(list.Where)
+	params := extractUniqueParams(list.Where) // Deduplicated!
 	for _, param := range params {
-		// Determine which column to use for type lookup
-		targetCol := param
-		if mappedCol, exists := list.TypeMapping[param]; exists {
-			targetCol = mappedCol
+		colName := param
+		if mappedCol, ok := list.TypeMapping[param]; ok {
+			colName = mappedCol
 		}
 
-		col, ok := columns[targetCol]
+		col, ok := columns[colName]
 		if !ok {
-			return "", fmt.Errorf("dal yaml definition error. missing column %s (mapped from param %s), which is used in where under list %s", targetCol, param, list.Name)
+			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", colName, list.Name)
 		}
-
-		// Note: We still use CamelCaser(param) for the actual variable name in Go!
 		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
 	}
 
@@ -226,7 +275,7 @@ func listFuncParams(list ListConfig, columns map[string]Column) (string, error) 
 // func (d *UserDAL) countListByAge(ctx context.Context, age int) (int64, error) {
 func countFuncParams(list ListConfig, columns map[string]Column) (string, error) {
 	result := ""
-	params := extractParams(list.Where)
+	params := extractUniqueParams(list.Where) // Deduplicated!
 	for _, param := range params {
 		colName := param
 		if mappedCol, ok := list.TypeMapping[param]; ok {
@@ -247,7 +296,7 @@ func countFuncParams(list ListConfig, columns map[string]Column) (string, error)
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v:%d:%d", age, startID, pageSize)
 func listCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
 	key := fmt.Sprintf("%s_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
-	params := extractParams(list.Where)
+	params := extractUniqueParams(list.Where) // Deduplicated!
 	for range params {
 		key += ":%v"
 	}
@@ -279,7 +328,7 @@ func listCacheKey(entityName string, list ListConfig, columns map[string]Column)
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v", age)
 func countCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
 	key := fmt.Sprintf("%s_count_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
-	params := extractParams(list.Where)
+	params := extractUniqueParams(list.Where) // Deduplicated!
 	for range params {
 		key += ":%v"
 	}

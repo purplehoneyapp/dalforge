@@ -48,7 +48,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | pascalCase}}(ctx cont
 
     // 2) Fallback to DB
     result, err := d.dbBreaker.Execute(func() (interface{}, error) {
-        return d.{{.List.Name | camelCase}}(ctx, {{listQueryParams false .List .Root.Columns}})
+        return d.{{.List.Name | camelCase}}(ctx, {{listFuncCallParams false .List .Root.Columns}})
     })
 
     if err != nil {

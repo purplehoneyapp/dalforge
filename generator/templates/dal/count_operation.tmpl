@@ -29,7 +29,7 @@ func (d *{{$entityArgumentName}}Repository) Count{{.List.Name | pascalCase}}(ctx
 
 	// 2) Fallback to DB
 	count, err := d.dbBreaker.Execute(func() (interface{}, error) {
-		return d.count{{.List.Name | pascalCase}}(ctx, {{countQueryParams .List .Root.Columns}})
+		return d.count{{.List.Name | pascalCase}}(ctx, {{countFuncCallParams .List .Root.Columns}})
 	})
 
 	if err != nil {
