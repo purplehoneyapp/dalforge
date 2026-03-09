@@ -201,10 +201,18 @@ func listFuncParams(list ListConfig, columns map[string]Column) (string, error) 
 	result := ""
 	params := extractParams(list.Where)
 	for _, param := range params {
-		col, ok := columns[param]
-		if !ok {
-			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", param, list.Name)
+		// Determine which column to use for type lookup
+		targetCol := param
+		if mappedCol, exists := list.TypeMapping[param]; exists {
+			targetCol = mappedCol
 		}
+
+		col, ok := columns[targetCol]
+		if !ok {
+			return "", fmt.Errorf("dal yaml definition error. missing column %s (mapped from param %s), which is used in where under list %s", targetCol, param, list.Name)
+		}
+
+		// Note: We still use CamelCaser(param) for the actual variable name in Go!
 		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
 	}
 
@@ -220,14 +228,18 @@ func countFuncParams(list ListConfig, columns map[string]Column) (string, error)
 	result := ""
 	params := extractParams(list.Where)
 	for _, param := range params {
-		col, ok := columns[param]
+		colName := param
+		if mappedCol, ok := list.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+
+		col, ok := columns[colName]
 		if !ok {
-			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", param, list.Name)
+			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", colName, list.Name)
 		}
 		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
 	}
 
-	// Clean up the trailing comma and space
 	return strings.TrimSuffix(result, ", "), nil
 }
 
@@ -243,22 +255,23 @@ func listCacheKey(entityName string, list ListConfig, columns map[string]Column)
 
 	paramStr := ""
 	for _, param := range params {
-		col := columns[param]
+		colName := param
+		if mappedCol, ok := list.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+
+		col := columns[colName]
 		goName := CamelCaser(param)
 
 		// If the column allows nulls, it's a pointer in Go.
-		// We generate an inline function to safely dereference it or return "nil".
 		if col.AllowNull {
-			// why <<null>> - very unlikely there will be a value like this that would mix it with nil values of pointer.
 			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
 	}
 
-	// listQueryParams always appends startID and pageSize, so trailing comma is safe here
 	paramStr += "startID, pageSize"
-
 	return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 }
 
@@ -273,18 +286,21 @@ func countCacheKey(entityName string, list ListConfig, columns map[string]Column
 
 	paramStr := ""
 	for _, param := range params {
-		col := columns[param]
+		colName := param
+		if mappedCol, ok := list.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+
+		col := columns[colName]
 		goName := CamelCaser(param)
 
 		if col.AllowNull {
-			// why <<null>> - very unlikely there will be a value like this that would mix it with nil values of pointer.
 			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
 	}
 
-	// Clean up trailing comma since count queries don't have pagination parameters at the end
 	paramStr = strings.TrimSuffix(paramStr, ", ")
 
 	if paramStr == "" {

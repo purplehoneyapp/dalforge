@@ -190,8 +190,9 @@ type OperationConfig struct {
 }
 
 type ListConfig struct {
-	Name       string `yaml:"name"`
-	Where      string `yaml:"where"`
-	Order      string `yaml:"order"`
-	Descending bool   `yaml:"desc"`
+	Name        string            `yaml:"name"`
+	Where       string            `yaml:"where"`
+	Order       string            `yaml:"order"`
+	Descending  bool              `yaml:"desc"`
+	TypeMapping map[string]string `yaml:"typeMapping"`
 }

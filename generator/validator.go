@@ -159,6 +159,13 @@ func validateListConfigs(lists []ListConfig, columns map[string]Column) []string
 				}
 			}
 		}
+
+		// Validate TypeMapping targets exist
+		for paramName, mappedCol := range list.TypeMapping {
+			if _, exists := columns[mappedCol]; !exists && !allowedDefaults[mappedCol] {
+				errs = append(errs, fmt.Sprintf("typeMapping column '%s' for param '%s' in list '%s' is not defined", mappedCol, paramName, list.Name))
+			}
+		}
 	}
 	return errs
 }

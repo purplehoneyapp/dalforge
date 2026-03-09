@@ -30,8 +30,10 @@ operations:
       order: birthdate
       desc: true
     - name: list_by_age
-      where: age = :age
+      where: age = :ageToday
       order: created
+      typeMapping:
+        ageToday: age
      # desc: true   # default is false
     - name: list_by_status
       where: status = :status

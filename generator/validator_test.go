@@ -21,9 +21,13 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 			Lists: []ListConfig{
 				{
 					Name:       "user_list",
-					Where:      "email = 'a@example.com'",
+					Where:      "email = :emailParam AND public_id = :pubId",
 					Order:      "created",
 					Descending: false,
+					TypeMapping: map[string]string{
+						"emailParam": "email",
+						"pubId":      "public_id",
+					},
 				},
 			},
 			Store:  true,
@@ -54,12 +58,12 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		Version: "",     // empty version (error)
 		Columns: map[string]Column{
 			"id":             {Type: "int64", AllowNull: false, Unique: true},
-			"email":          {Type: "varchar", AllowNull: false, Unique: false},                    // error: used in gets but not unique
-			"firstName":      {Type: "varchar", AllowNull: false, Unique: false},                    // error: not snake_case
-			"invalid":        {Type: "unknown", AllowNull: false, Unique: false},                    // error: unsupported type
-			"legacy_uuid":    {Type: "uuid", AllowNull: false, Unique: false},                       // error: uuid is no longer supported
-			"missing_prefix": {Type: "uid", Prefix: "", AllowNull: false, Unique: false},            // error: uid requires a prefix
-			"bad_prefix":     {Type: "uid", Prefix: "User Prefix", AllowNull: false, Unique: false}, // error: prefix must be snake_case
+			"email":          {Type: "varchar", AllowNull: false, Unique: false},                   // error: used in gets but not unique
+			"firstName":      {Type: "varchar", AllowNull: false, Unique: false},                   // error: not snake_case
+			"invalid":        {Type: "unknown", AllowNull: false, Unique: false},                   // error: unsupported type
+			"legacy_uuid":    {Type: "uuid", AllowNull: false, Unique: false},                      // error: uuid is no longer supported
+			"missing_prefix": {Type: "uid", Prefix: "", AllowNull: false, Unique: true},            // error: uid requires a prefix when unique
+			"bad_prefix":     {Type: "uid", Prefix: "User Prefix", AllowNull: false, Unique: true}, // error: prefix must be snake_case when unique
 		},
 		Operations: OperationConfig{
 			Gets: []string{"id", "email", "non_existent"}, // non_existent: error; email: error due to not unique.
@@ -75,6 +79,15 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 					Where:      "",
 					Order:      "unknown", // error: order column not defined in columns and not a default
 					Descending: true,
+				},
+				{
+					Name:       "invalid_mapping_list",
+					Where:      "email = :badParam",
+					Order:      "created",
+					Descending: false,
+					TypeMapping: map[string]string{
+						"badParam": "ghost_column", // error: mapping to a column that doesn't exist
+					},
 				},
 			},
 			Store:  true,
@@ -105,13 +118,14 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		"column name 'firstName' must be in snake_case",
 		"column 'invalid' has unsupported type 'unknown'",
 		"column 'legacy_uuid' has unsupported type 'uuid'",                    // Tests the removal of legacy uuid
-		"column 'missing_prefix' of type 'uid' requires a non-empty 'prefix'", // Tests missing prefix
-		"prefix 'User Prefix' for column 'bad_prefix' must be in snake_case",  // Tests malformed prefix
+		"column 'missing_prefix' of type 'uid' requires a non-empty 'prefix'", // Tests missing prefix (now triggers correctly)
+		"prefix 'User Prefix' for column 'bad_prefix' must be in snake_case",  // Tests malformed prefix (now triggers correctly)
 		"get operation refers to unknown column 'non_existent'",
 		"get operation requires column 'email' to be unique",
 		"list name 'lst' must be longer than 4 characters",
 		"list 'lst' order must contain exactly one column",
 		"order column 'unknown' in list 'long_list' is not defined and not a default column",
+		"typeMapping column 'ghost_column' for param 'badParam' in list 'invalid_mapping_list' is not defined", // Tests invalid mapping
 		"caching type must be 'redis'",
 		"singleExpirationSeconds must be greater than 1",
 		"listExpirationSeconds must be greater than 1",
