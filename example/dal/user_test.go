@@ -4,6 +4,7 @@ package dal
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -188,11 +189,13 @@ func TestUserCRUD(t *testing.T) {
 		ctx := context.Background()
 
 		// Test Create
+		initialMeta := json.RawMessage(`{"theme":"dark","notifications_enabled":true}`)
 		newUser := &User{
 			Age:       25,
 			Email:     "test@example.com",
 			Status:    Ptr("active"),
 			Birthdate: Ptr(time.Now()),
+			Meta:      &initialMeta,
 		}
 
 		created, err := userDAL.Create(ctx, newUser)
@@ -209,6 +212,8 @@ func TestUserCRUD(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, created.ID, fetched.ID)
 		assert.Equal(t, "test@example.com", fetched.Email)
+		assert.NotNil(t, fetched.Meta)
+		assert.JSONEq(t, `{"theme":"dark","notifications_enabled":true}`, string(*fetched.Meta))
 
 		getByIDCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "get_by_id"))
 		assert.Equal(t, 1.0, getByIDCounter, "Expected one get_by_id operation")
@@ -220,13 +225,19 @@ func TestUserCRUD(t *testing.T) {
 
 		// --- Test Update ---
 		newEmail := "updated@example.com"
+		newMeta := json.RawMessage(`{"theme":"light","notifications_enabled":false}`)
+
 		fetched.Email = newEmail
+		fetched.Meta = &newMeta
+
 		err = userDAL.Update(ctx, fetched)
 		assert.NoError(t, err)
 
 		updated, err := userDAL.GetByID(ctx, fetched.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, newEmail, updated.Email)
+		assert.NotNil(t, updated.Meta)
+		assert.JSONEq(t, `{"theme":"light","notifications_enabled":false}`, string(*updated.Meta))
 
 		updateCounter := testutil.ToFloat64(dalOperationsTotalCounter.WithLabelValues("user", "update"))
 		assert.Equal(t, 1.0, updateCounter, "Expected one update operation")
@@ -272,11 +283,13 @@ func TestUserCreateBulk(t *testing.T) {
 
 		for i := 1; i <= numEntries; i++ {
 			// Test Create
+			metaData := json.RawMessage(fmt.Sprintf(`{"index": %d}`, i))
 			newUser := &User{
 				Age:       25,
 				Email:     fmt.Sprintf("test_%02d@example.com", i),
 				Status:    Ptr("active"),
 				Birthdate: Ptr(time.Now()),
+				Meta:      &metaData,
 			}
 			users = append(users, newUser)
 		}
@@ -300,6 +313,8 @@ func TestUserCreateBulk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, users[0].ID, fetched.ID)
 		assert.Equal(t, "test_01@example.com", fetched.Email)
+		assert.NotNil(t, fetched.Meta)
+		assert.JSONEq(t, `{"index": 1}`, string(*fetched.Meta))
 	})
 }
 

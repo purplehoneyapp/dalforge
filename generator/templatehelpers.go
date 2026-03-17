@@ -114,6 +114,11 @@ func toGoType(yamlType string, allowNull bool) string {
 			return "*time.Time"
 		}
 		return "time.Time"
+	case "json":
+		if allowNull {
+			return "*json.RawMessage"
+		}
+		return "json.RawMessage"
 	default:
 		return "interface{}" // Fallback for unknown types
 	}
@@ -143,6 +148,8 @@ func toSQLType(yamlType string) string {
 		return "DATETIME"
 	case "uid":
 		return "VARCHAR(50)"
+	case "json": // Add JSON case
+		return "JSON"
 	default:
 		return "TEXT" // Fallback for unknown types
 	}
@@ -267,4 +274,15 @@ func invalidateUniqueColumnsCache(config EntityConfig) string {
 	}
 
 	return result
+}
+
+// hasJSONColumn checks if any column in the entity is of type "json".
+// This is used to conditionally import the "encoding/json" package in generated code.
+func hasJSONColumn(columns map[string]Column) bool {
+	for _, col := range columns {
+		if col.Type == "json" {
+			return true
+		}
+	}
+	return false
 }

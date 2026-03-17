@@ -19,6 +19,9 @@ import (
 
     "fmt"
     "time"
+    {{if hasJSONColumn .Columns}}
+	"encoding/json"
+	{{end}}
 
     "github.com/patrickmn/go-cache"
     "github.com/sony/gobreaker"

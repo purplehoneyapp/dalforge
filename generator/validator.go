@@ -81,6 +81,7 @@ func validateColumns(columns map[string]Column) []string {
 		"time":     true,
 		"datetime": true,
 		"uid":      true,
+		"json":     true,
 	}
 
 	for colName, col := range columns {

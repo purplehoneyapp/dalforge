@@ -52,6 +52,7 @@ func NewGenerator() (*Generator, error) {
 		"listSQLIndexes":               listSQLIndexes,
 		"checkColumnsChanged":          checkColumnsChanged,
 		"invalidateUniqueColumnsCache": invalidateUniqueColumnsCache,
+		"hasJSONColumn":                hasJSONColumn,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")

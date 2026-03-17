@@ -10,11 +10,12 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 		Name:    "user", // snake_case, >3 chars
 		Version: "v1",   // non-empty and valid format
 		Columns: map[string]Column{
-			"id":        {Type: "int64", AllowNull: false, Unique: true},
-			"public_id": {Type: "uid", Prefix: "user", AllowNull: false, Unique: true}, // testing valid uid
-			"email":     {Type: "varchar", AllowNull: false, Unique: true},
-			"created":   {Type: "datetime", AllowNull: false, Unique: false},
-			"updated":   {Type: "datetime", AllowNull: false, Unique: false},
+			"id":          {Type: "int64", AllowNull: false, Unique: true},
+			"public_id":   {Type: "uid", Prefix: "user", AllowNull: false, Unique: true},
+			"email":       {Type: "varchar", AllowNull: false, Unique: true},
+			"preferences": {Type: "json", AllowNull: true, Unique: false}, // Injecting JSON column here
+			"created":     {Type: "datetime", AllowNull: false, Unique: false},
+			"updated":     {Type: "datetime", AllowNull: false, Unique: false},
 		},
 		Operations: OperationConfig{
 			Gets: []string{"id", "email", "public_id"},
