@@ -39,8 +39,8 @@ func ValidateEntityConfig(entity EntityConfig) error {
 // has no spaces and is snake_cased.
 func validateEntityName(name string) []string {
 	var errs []string
-	if len(name) <= 3 {
-		errs = append(errs, "entity name must be longer than 3 characters")
+	if len(name) < 3 {
+		errs = append(errs, "entity name must be at least 3 characters")
 	}
 	if strings.Contains(name, " ") {
 		errs = append(errs, "entity name must not contain spaces")
