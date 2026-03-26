@@ -42,7 +42,6 @@ func NewRedisCacheProvider(addr, password string, db int, telemetry TelemetryPro
 			Password: password,
 			DB:       db,
 			OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-				log.Infof("Connected to redis: [%s]", addr)
 				return nil
 			},
 		},
@@ -67,6 +66,7 @@ func (p *RedisCacheProvider) Connect() error {
 		p.client = redis.NewClient(p.options)
 		_, err = p.client.Ping(p.ctx).Result()
 		if err == nil {
+			log.Infof("Connected to redis: [%s]", p.options.Addr)
 			return nil
 		}
 
