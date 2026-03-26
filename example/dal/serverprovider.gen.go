@@ -112,7 +112,7 @@ func (s *ServerProvider) Connect() error {
 // connectInstance creates a *sql.DB for the given instance.
 func (s *ServerProvider) connectInstance(inst DBInstance) (*sql.DB, error) {
 	// Build DataSourceName for MySQL driver.
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&loc=UTC",
 		inst.Credentials.User,
 		inst.Credentials.Pass,
 		inst.Server,

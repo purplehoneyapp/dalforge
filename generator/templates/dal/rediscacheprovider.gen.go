@@ -179,7 +179,7 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Infof("Listening for cache invalidation messages for %s\n", entityName)
+	log.Debugf("Listening for cache invalidation messages for %s\n", entityName)
 	for msg := range pubsub.Channel() {
 		log.Debugf("Got cache invalidation message for %s\n", entityName)
 		// Extract entity name from the channel name.
@@ -202,7 +202,7 @@ func (p *RedisCacheProvider) listenForFlushList(entityName string) {
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Infof("Listening for cache_flush_list messages for %s\n", entityName)
+	log.Debugf("Listening for cache_flush_list messages for %s\n", entityName)
 	for range pubsub.Channel() {
 		log.Debugf("Got cache_flush_list message for %s\n", entityName)
 		// Extract entity name from the channel name.

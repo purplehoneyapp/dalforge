@@ -1,5 +1,9 @@
 # Version History
 
+## v1.3.2 - 2026-03-26
+  - fixed dsn connection string to use &loc=UTC for db connections.
+  - fixed infof to debugf for cache invalidations.
+
 ## v1.3.0 - 2026-03-17
   - added support for json field type
 
