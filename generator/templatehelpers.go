@@ -147,7 +147,7 @@ func toSQLType(yamlType string) string {
 	case "datetime":
 		return "DATETIME"
 	case "uid":
-		return "VARCHAR(50)"
+		return "VARCHAR(255)"
 	case "json": // Add JSON case
 		return "JSON"
 	default:

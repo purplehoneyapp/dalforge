@@ -70,6 +70,30 @@ func NewServerProvider(cfg *ServerConfig) (*ServerProvider, error) {
 		return nil, fmt.Errorf("configuration cannot be nil")
 	}
 
+	// --- CONFIGURATION VALIDATION ---
+	allSeen := false
+	for _, group := range cfg.ServerGroups {
+		hasAllInGroup := false
+		for _, entity := range group.Entities {
+			if strings.EqualFold(entity, "all") {
+				hasAllInGroup = true
+				break
+			}
+		}
+
+		if hasAllInGroup {
+			// Rule 1: "all" must not be mixed with other specific entities
+			if len(group.Entities) > 1 {
+				return nil, fmt.Errorf("configuration error: server group '%s' mixes 'all' with specific entities", group.Name)
+			}
+			// Rule 2: "all" can only be defined in one server group globally
+			if allSeen {
+				return nil, fmt.Errorf("configuration error: multiple server groups define 'all' as an entity fallback")
+			}
+			allSeen = true
+		}
+	}
+
 	return &ServerProvider{
 		config: cfg,
 		groups: make(map[string]*dbGroup),
@@ -151,31 +175,22 @@ func (s *ServerProvider) Disconnect() error {
 func (s *ServerProvider) AllDatabases(entityName string, mode string) []*sql.DB {
 	var result []*sql.DB
 
-	for _, group := range s.groups {
-		if contains(group.entities, entityName) {
-			switch mode {
-			case "read":
-				result = append(result, group.reads...)
-			case "write":
-				result = append(result, group.writes...)
-			default: // "all"
-				result = append(result, group.reads...)
-				result = append(result, group.writes...)
-			}
+	// We use findGroupByEntity directly to ensure we don't accidentally
+	// return duplicate connections from both the specific group AND the 'all' fallback group.
+	grp := s.findGroupByEntity(entityName)
+	if grp != nil {
+		switch mode {
+		case "read":
+			result = append(result, grp.reads...)
+		case "write":
+			result = append(result, grp.writes...)
+		default: // "all"
+			result = append(result, grp.reads...)
+			result = append(result, grp.writes...)
 		}
 	}
 
 	return result
-}
-
-// Helper function to check if a string exists in a slice
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 // GetDatabase looks up the server group for the given entityName, then picks a read or write DB.
@@ -202,7 +217,9 @@ func (s *ServerProvider) GetDatabase(entityName string, isWriteOperation bool) (
 }
 
 // findGroupByEntity finds the group that has the specified entity.
+// It uses a two-pass approach: exact matches first, followed by the "all" fallback.
 func (s *ServerProvider) findGroupByEntity(entityName string) *dbGroup {
+	// First Pass: Look for an exact match for the requested entity
 	for _, grp := range s.groups {
 		for _, e := range grp.entities {
 			if strings.EqualFold(e, entityName) {
@@ -210,5 +227,15 @@ func (s *ServerProvider) findGroupByEntity(entityName string) *dbGroup {
 			}
 		}
 	}
+
+	// Second Pass: If no specific group is found, check if an "all" fallback group exists
+	for _, grp := range s.groups {
+		for _, e := range grp.entities {
+			if strings.EqualFold(e, "all") {
+				return grp
+			}
+		}
+	}
+
 	return nil
 }

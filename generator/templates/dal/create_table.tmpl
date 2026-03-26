@@ -18,6 +18,7 @@ func (d *{{$entityArgumentName}}Repository) CreateTable(ctx context.Context) err
 			return fmt.Errorf("failed to check table existence: %w", err)
 		}
 		if exists {
+		    log.Infof("CreateTable: table [%s] already exist", "{{$entityTableName}}")
 			return nil
 		}
 
@@ -33,9 +34,10 @@ func (d *{{$entityArgumentName}}Repository) CreateTable(ctx context.Context) err
 			_, err = db.ExecContext(ctx, stmt)
 			if err != nil {
 				return fmt.Errorf("failed to execute SQL statement %q: %w", stmt, err)
-			}
+			}			
 		}
 	}
+	log.Infof("CreateTable: table [%s] created", "{{$entityTableName}}")
 
 	return nil
 }

@@ -3,6 +3,8 @@
 ## v1.3.2 - 2026-03-26
   - fixed dsn connection string to use &loc=UTC for db connections.
   - fixed infof to debugf for cache invalidations.
+  - configuration for server group support "all" value to allow any entity name.
+  - increased length of uid from 50 to 255 chars
 
 ## v1.3.0 - 2026-03-17
   - added support for json field type
