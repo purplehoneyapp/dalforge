@@ -63,6 +63,7 @@ func (p *RedisCacheProvider) Connect() error {
 	maxRetries := 5
 
 	for i := 0; i < maxRetries; i++ {
+		log.Infof("Pinging redis for connection: [%s]", p.options.Addr)
 		p.client = redis.NewClient(p.options)
 		_, err = p.client.Ping(p.ctx).Result()
 		if err == nil {
@@ -155,8 +156,6 @@ func (p *RedisCacheProvider) OnCacheInvalidated(entityName string, handler func(
 	if !exists {
 		p.handlers[entityName] = handler
 		go p.listenForInvalidations(entityName)
-		// introduce small wait period for subscription to take effect and we start listening to the channel.
-		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -167,13 +166,12 @@ func (p *RedisCacheProvider) OnCacheFlushList(entityName string, handler func())
 	if !exists {
 		p.flushListHandlers[entityName] = handler
 		go p.listenForFlushList(entityName)
-		// introduce small wait period for subscription to take effect and we start listening to the channel.
-		time.Sleep(2 * time.Second)
 	}
 }
 
 // listenForInvalidations subscribes to all entity channels using a pattern.
 func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
+	time.Sleep(2 * time.Second)
 	channel := fmt.Sprintf("cache_invalidation_%s", entityName)
 	pubsub := p.client.Subscribe(p.ctx, channel)
 	defer pubsub.Close()
@@ -197,6 +195,7 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 
 // listenForFlushList subscribes to an entity's flush_list channel
 func (p *RedisCacheProvider) listenForFlushList(entityName string) {
+	time.Sleep(2 * time.Second)
 	channel := fmt.Sprintf("cache_flush_list_%s", entityName)
 	pubsub := p.client.Subscribe(p.ctx, channel)
 	defer pubsub.Close()
