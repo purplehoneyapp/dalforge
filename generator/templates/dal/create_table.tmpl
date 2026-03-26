@@ -22,19 +22,32 @@ func (d *{{$entityArgumentName}}Repository) CreateTable(ctx context.Context) err
 			return nil
 		}
 
-		// Split into individual statements
-		statements := strings.Split(schema{{$entityStructName}}, ";")
+		// 1. Strip out comment lines completely BEFORE splitting by semicolons
+		var cleanLines []string
+		for _, line := range strings.Split(schema{{$entityStructName}}, "\n") {
+			trimmedLine := strings.TrimSpace(line)
+			// Skip empty lines and lines that start with a comment hash
+			if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+				continue
+			}
+			cleanLines = append(cleanLines, line)
+		}
+		
+		// 2. Re-join the clean lines, then split by semicolon
+		cleanSchema := strings.Join(cleanLines, "\n")
+		statements := strings.Split(cleanSchema, ";")
 
+		// 3. Execute the actual statements
 		for _, stmt := range statements {
 			stmt = strings.TrimSpace(stmt)
-			if stmt == "" || strings.HasPrefix(stmt, "#") {
+			if stmt == "" {
 				continue
 			}
 
 			_, err = db.ExecContext(ctx, stmt)
 			if err != nil {
 				return fmt.Errorf("failed to execute SQL statement %q: %w", stmt, err)
-			}			
+			}
 		}
 	}
 	log.Infof("CreateTable: table [%s] created", "{{$entityTableName}}")
