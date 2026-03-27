@@ -124,6 +124,18 @@ func New{{$entityStructName}}Repository(
 		dbSettings.OnStateChange = OnCircuitBreakerStateChange
 	}
 
+    dbSettings.IsSuccessful = func(err error) bool {
+		if err == nil {
+			return true
+		}
+		// If the record just doesn't exist, the database is perfectly healthy
+		if errors.Is(err, ErrNotFound) {
+			return true
+		}
+		return false
+	}
+
+
     if dbSettings.Timeout == 0 {
         dbSettings.Timeout = time.Second * {{.CircuitBreaker.TimeoutSeconds}}
     }

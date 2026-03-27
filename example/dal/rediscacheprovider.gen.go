@@ -21,6 +21,7 @@ type RedisCacheProvider struct {
 	// handlers maps an entity name to its invalidation handler.
 	handlers          map[string]func(string)
 	flushListHandlers map[string]func()
+	pubsubs           []*redis.PubSub // track active subscriptions
 	mu                sync.RWMutex
 
 	isClosed  bool
@@ -42,7 +43,6 @@ func NewRedisCacheProvider(addr, password string, db int, telemetry TelemetryPro
 			Password: password,
 			DB:       db,
 			OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-				log.Infof("Connected to redis: [%s]", addr)
 				return nil
 			},
 		},
@@ -64,9 +64,11 @@ func (p *RedisCacheProvider) Connect() error {
 	maxRetries := 5
 
 	for i := 0; i < maxRetries; i++ {
+		log.Infof("Pinging redis for connection: [%s]", p.options.Addr)
 		p.client = redis.NewClient(p.options)
 		_, err = p.client.Ping(p.ctx).Result()
 		if err == nil {
+			log.Infof("Connected to redis: [%s]", p.options.Addr)
 			return nil
 		}
 
@@ -155,8 +157,6 @@ func (p *RedisCacheProvider) OnCacheInvalidated(entityName string, handler func(
 	if !exists {
 		p.handlers[entityName] = handler
 		go p.listenForInvalidations(entityName)
-		// introduce small wait period for subscription to take effect and we start listening to the channel.
-		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -167,19 +167,24 @@ func (p *RedisCacheProvider) OnCacheFlushList(entityName string, handler func())
 	if !exists {
 		p.flushListHandlers[entityName] = handler
 		go p.listenForFlushList(entityName)
-		// introduce small wait period for subscription to take effect and we start listening to the channel.
-		time.Sleep(2 * time.Second)
 	}
 }
 
 // listenForInvalidations subscribes to all entity channels using a pattern.
 func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
+	time.Sleep(2 * time.Second)
 	channel := fmt.Sprintf("cache_invalidation_%s", entityName)
 	pubsub := p.client.Subscribe(p.ctx, channel)
+
+	// 👈 Track the pubsub so we can close it later
+	p.mu.Lock()
+	p.pubsubs = append(p.pubsubs, pubsub)
+	p.mu.Unlock()
+
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Infof("Listening for cache invalidation messages for %s\n", entityName)
+	log.Debugf("Listening for cache invalidation messages for %s\n", entityName)
 	for msg := range pubsub.Channel() {
 		log.Debugf("Got cache invalidation message for %s\n", entityName)
 		// Extract entity name from the channel name.
@@ -197,12 +202,19 @@ func (p *RedisCacheProvider) listenForInvalidations(entityName string) {
 
 // listenForFlushList subscribes to an entity's flush_list channel
 func (p *RedisCacheProvider) listenForFlushList(entityName string) {
+	time.Sleep(2 * time.Second)
 	channel := fmt.Sprintf("cache_flush_list_%s", entityName)
 	pubsub := p.client.Subscribe(p.ctx, channel)
+
+	// 👈 Track the pubsub so we can close it later
+	p.mu.Lock()
+	p.pubsubs = append(p.pubsubs, pubsub)
+	p.mu.Unlock()
+
 	defer pubsub.Close()
 
 	// We got our pubsub created so lets process incoming messages in their own
-	log.Infof("Listening for cache_flush_list messages for %s\n", entityName)
+	log.Debugf("Listening for cache_flush_list messages for %s\n", entityName)
 	for range pubsub.Channel() {
 		log.Debugf("Got cache_flush_list message for %s\n", entityName)
 		// Extract entity name from the channel name.
@@ -228,6 +240,12 @@ func (p *RedisCacheProvider) Close() {
 	}
 	log.Infoln("Closing RedisCacheProvider...")
 	p.cancel()
+
+	// 👈 Gracefully close all Pub/Sub subscriptions FIRST
+	for _, ps := range p.pubsubs {
+		_ = ps.Close()
+	}
+
 	if p.client != nil {
 		_ = p.client.Close()
 	}
