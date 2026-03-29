@@ -1,5 +1,8 @@
 # Version History
 
+## v1.3.4 - 2026-03-28
+  - softDelete feature added to dal layer
+
 ## v1.3.3 - 2026-03-27
   - fixed dsn connection string to use &loc=UTC for db connections.
   - fixed infof to debugf for cache invalidations.

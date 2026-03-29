@@ -4,6 +4,9 @@ CREATE TABLE {{.Name | snakeCase}}s (
     {{- range $colName, $col := .Columns}}
     {{$colName | snakeCase}} {{toSQLType $col.Type}}{{if not $col.AllowNull}} NOT NULL{{end}},
     {{- end}}
+    {{if .Operations.SoftDelete}}
+    deleted_at TIMESTAMP NULL,
+    {{end}}
     created TIMESTAMP,
     updated TIMESTAMP
 ) ENGINE=InnoDB;
@@ -16,3 +19,7 @@ CREATE UNIQUE INDEX idx_{{. | snakeCase}} ON {{$.Name | snakeCase}}s ({{. | snak
 
 # Indexes that serve all the list operations
 {{ listSQLIndexes .Name .Columns .Operations.Lists }}
+
+{{if .Operations.SoftDelete}}
+CREATE INDEX idx_deleted_at ON users (deleted_at);
+{{end}}

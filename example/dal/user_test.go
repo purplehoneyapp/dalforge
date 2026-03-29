@@ -707,3 +707,80 @@ func TestOptimisticLocking(t *testing.T) {
 		assert.Greater(t, retrieved.Version, created.Version)
 	})
 }
+
+func TestUserSoftAndHardDelete(t *testing.T) {
+	t.Run("TestSoftAndHardDelete", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		// Initialize DAL
+		userDAL := NewUserRepository(
+			dbProvider,
+			nil, // default cache provider
+			nil, // default config provider
+			gobreaker.Settings{},
+			PrometheusTelemetryProvider{},
+		)
+
+		ctx := context.Background()
+
+		// 1. Create a "Ghost" User
+		originalEmail := "ghost_account@example.com"
+		ghostUser := &User{
+			Age:       25,
+			Email:     originalEmail,
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
+		}
+
+		createdGhost, err := userDAL.Create(ctx, ghostUser)
+		assert.NoError(t, err)
+		assert.NotZero(t, createdGhost.ID)
+
+		// 2. Perform the Soft Delete
+		err = userDAL.Delete(ctx, createdGhost)
+		assert.NoError(t, err)
+
+		// 3. Verify DAL scoping (User is invisible to GetByID)
+		_, err = userDAL.GetByID(ctx, createdGhost.ID)
+		assert.ErrorIs(t, err, ErrNotFound, "Soft deleted user should not be found by GetByID")
+
+		// 4. Verify raw Database state (Row exists, deleted_at is set, unique fields scrambled)
+		db, err := dbProvider.GetDatabase("user", false)
+		assert.NoError(t, err)
+
+		var deletedAt sql.NullTime
+		var scrambledEmail, scrambledUid string
+
+		// Bypassing DAL to check raw table state
+		err = db.QueryRow("SELECT deleted_at, email, uid FROM users WHERE id = ?", createdGhost.ID).
+			Scan(&deletedAt, &scrambledEmail, &scrambledUid)
+
+		assert.NoError(t, err)
+		assert.True(t, deletedAt.Valid, "deleted_at timestamp should be set in the database")
+		assert.Contains(t, scrambledEmail, "-del-", "Email should be scrambled to release unique constraint")
+		assert.Contains(t, scrambledUid, "-del-", "UID should be scrambled to release unique constraint")
+
+		// 5. Verify Re-registration (Unique constraint successfully bypassed)
+		returningUser := &User{
+			Age:       30,
+			Email:     originalEmail, // Using the exact same email!
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
+		}
+
+		createdReturning, err := userDAL.Create(ctx, returningUser)
+		assert.NoError(t, err, "Should be able to create a new user with the original email")
+		assert.NotEqual(t, createdGhost.ID, createdReturning.ID)
+
+		// 6. Perform the Hard Delete on the original ghost account
+		err = userDAL.HardDelete(ctx, createdGhost)
+		assert.NoError(t, err)
+
+		// 7. Verify raw Database state (Row is completely purged)
+		var count int
+		err = db.QueryRow("SELECT count(*) FROM users WHERE id = ?", createdGhost.ID).Scan(&count)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, count, "Row should be completely removed from the database after HardDelete")
+	})
+}

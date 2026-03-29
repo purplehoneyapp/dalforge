@@ -286,3 +286,14 @@ func hasJSONColumn(columns map[string]Column) bool {
 	}
 	return false
 }
+
+func uniqueStringColumns(columns map[string]Column) []string {
+	var uniqueCols []string
+	for name, col := range columns {
+		// Only scramble string-based unique columns
+		if col.Unique && (col.Type == "varchar" || col.Type == "uid" || col.Type == "text") {
+			uniqueCols = append(uniqueCols, name)
+		}
+	}
+	return uniqueCols
+}

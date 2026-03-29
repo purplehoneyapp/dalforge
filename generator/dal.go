@@ -53,6 +53,7 @@ func NewGenerator() (*Generator, error) {
 		"checkColumnsChanged":          checkColumnsChanged,
 		"invalidateUniqueColumnsCache": invalidateUniqueColumnsCache,
 		"hasJSONColumn":                hasJSONColumn,
+		"uniqueStringColumns":          uniqueStringColumns,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")
@@ -186,10 +187,11 @@ type Column struct {
 }
 
 type OperationConfig struct {
-	Gets   []string     `yaml:"gets"`
-	Lists  []ListConfig `yaml:"lists"`
-	Store  bool         `yaml:"store"`
-	Delete bool         `yaml:"delete"`
+	Gets       []string     `yaml:"gets"`
+	Lists      []ListConfig `yaml:"lists"`
+	Store      bool         `yaml:"store"`
+	Delete     bool         `yaml:"delete"`
+	SoftDelete bool         `yaml:"softDelete"`
 }
 
 type ListConfig struct {

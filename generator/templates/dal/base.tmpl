@@ -42,6 +42,9 @@ type {{$entityStructName}} struct {
 
     Created   time.Time `json:"created"`
     Updated   time.Time `json:"updated"`
+{{if .Operations.SoftDelete}}
+    DeletedAt *time.Time `json:"deleted_at"`
+{{end}}
 }
 
 // {{$entityStructName}}Repository defines the interface for the {{$entityStructName}}.
@@ -63,6 +66,11 @@ type {{$entityStructName}}Repository interface {
 {{- if and .Operations .Operations.Delete}}
     Delete(ctx context.Context, entity *{{$entityStructName}}) error
 {{- end}}
+{{- if and .Operations .Operations.SoftDelete}}
+    HardDelete(ctx context.Context, entity *{{$entityStructName}}) error
+{{- end}}
+
+
 
 {{- if and .Operations .Operations.Gets }}
     {{- range .Operations.Gets }}

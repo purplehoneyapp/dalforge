@@ -78,9 +78,9 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
 
     // if startID is zero then query is different for pagination
     if startID == 0 {
-        query = `{{listQuery true $entityStructName .List .Root.Columns}}`
+        query = `{{listQuery true $entityStructName .List .Root.Columns .Root.Operations.SoftDelete}}`
     } else {
-        query = `{{listQuery false $entityStructName .List .Root.Columns}}`
+        query = `{{listQuery false $entityStructName .List .Root.Columns .Root.Operations.SoftDelete}}`
     }
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
@@ -113,6 +113,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | camelCase}}(ctx conte
             {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
             {{end}}{{end}}&entity.Created,
             &entity.Updated,
+            {{if .Root.Operations.SoftDelete}}&entity.DeletedAt,{{end}}
 		)
 		if err != nil {
             d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)

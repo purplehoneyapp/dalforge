@@ -54,9 +54,9 @@ func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ct
     dbStart := time.Now()
 
     query := `
-        SELECT {{querySelect .Root.Columns}}
+        SELECT {{querySelect .Root.Columns .Root.Operations.SoftDelete}}
         FROM {{$entityTableName}}s
-        WHERE {{.ColumnName | snakeCase}} = ?
+        WHERE {{.ColumnName | snakeCase}} = ? {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
     `
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
@@ -73,6 +73,7 @@ func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pascalCase}}(ct
         {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
         {{end}}{{end}}&entity.Created,
         &entity.Updated,
+        {{if .Root.Operations.SoftDelete}}&entity.DeletedAt,{{end}}
     )
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {

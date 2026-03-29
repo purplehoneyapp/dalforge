@@ -53,7 +53,7 @@ func (d *{{$entityArgumentName}}Repository) update(ctx context.Context, entity *
 	query := `
 		UPDATE {{$entityTableName}}s
 		SET {{template "comma_separated_update" .}}, updated=?, version = version + 1
-		WHERE id = ? AND version = ?
+		WHERE id = ? AND version = ? {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
 	`
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);

@@ -7,6 +7,9 @@ CREATE TABLE users (
     meta JSON,
     status VARCHAR(255),
     uid VARCHAR(255) NOT NULL,
+    
+    deleted_at TIMESTAMP NULL,
+    
     created TIMESTAMP,
     updated TIMESTAMP
 ) ENGINE=InnoDB;
@@ -21,3 +24,6 @@ CREATE INDEX idx_age ON users (age);
 CREATE INDEX idx_created ON users (created);
 CREATE INDEX idx_status ON users (status);
 
+
+
+CREATE INDEX idx_deleted_at ON users (deleted_at);

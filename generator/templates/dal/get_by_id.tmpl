@@ -81,9 +81,9 @@ func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int6
     dbStart := time.Now();
 
     query := `
-        SELECT {{querySelect .Columns}}
+        SELECT {{querySelect .Columns .Operations.SoftDelete}}
         FROM {{$entityTableName}}s
-        WHERE id = ?
+        WHERE id = ? {{if .Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
     `
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false);
@@ -100,6 +100,7 @@ func (d *{{$entityArgumentName}}Repository) getByID(ctx context.Context, id int6
         {{- range $colName, $col := .Columns}}&entity.{{$colName | pascalCase}},{{- end}}
         &entity.Created,
         &entity.Updated,
+        {{if .Operations.SoftDelete}}&entity.DeletedAt,{{end}}
     )
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {

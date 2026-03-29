@@ -4,6 +4,7 @@ CREATE TABLE posts (
     deleted BOOLEAN NOT NULL,
     post text NOT NULL,
     target_age TINYINT NOT NULL,
+    
     created TIMESTAMP,
     updated TIMESTAMP
 ) ENGINE=InnoDB;
@@ -14,4 +15,5 @@ CREATE TABLE posts (
 CREATE INDEX idx_target_age ON posts (target_age);
 CREATE INDEX idx_deleted ON posts (deleted);
 CREATE INDEX idx_created ON posts (created);
+
 

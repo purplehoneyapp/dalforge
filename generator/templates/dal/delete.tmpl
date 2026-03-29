@@ -37,10 +37,24 @@ func (d *{{$entityArgumentName}}Repository) delete(ctx context.Context, id int64
 	start := time.Now()
 	const operation = "delete"
 
+	{{if .Root.Operations.SoftDelete}}
+	query := `
+		UPDATE {{$entityTableName}}s
+		SET 
+			deleted_at = NOW(), 
+			updated = NOW(), 
+			version = version + 1
+			{{- range $col := uniqueStringColumns .Root.Columns }}
+			, {{$col}} = CONCAT({{$col}}, '-del-', UUID())
+			{{- end }}
+		WHERE id = ? AND deleted_at IS NULL
+	`
+	{{else}}
 	query := `
 		DELETE FROM {{$entityTableName}}s
 		WHERE id = ?
 	`
+	{{end}}
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
     if dbErr != nil {
@@ -68,4 +82,72 @@ func (d *{{$entityArgumentName}}Repository) delete(ctx context.Context, id int64
 	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
 	return nil
 }
+
+{{if .Root.Operations.SoftDelete}}
+// HardDelete permanently removes the entity from the database.
+// returns ErrNotFound in case nothing is deleted.
+func (d *{{$entityArgumentName}}Repository) HardDelete(ctx context.Context, entity *{{$entityStructName}}) error {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return ErrOperationBlocked
+    }
+
+	if entity.ID == 0 {
+		// nothing can be deleted as entity is not created.
+		return ErrNotFound
+	}
+
+	const operation = "hard_delete"
+	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+	_, err := d.dbBreaker.Execute(func() (interface{}, error) {
+		return nil, d.hardDelete(ctx, entity.ID)
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Lets clear item from cache and on next use use DB as source of truth
+	d.InvalidateCache(entity)
+	d.FlushListCache()
+
+	return err
+}
+
+func (d *{{$entityArgumentName}}Repository) hardDelete(ctx context.Context, id int64) error {
+	start := time.Now()
+	const operation = "hard_delete"
+
+	query := `
+		DELETE FROM {{$entityTableName}}s
+		WHERE id = ?
+	`
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true);
+    if dbErr != nil {
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return dbErr
+    }
+
+	res, err := db.ExecContext(ctx, query, id)
+	if err != nil {
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+		return fmt.Errorf("failed to hard delete {{$entityTableName}}: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)	
+	d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(start).Seconds())	
+	return nil
+}
+{{end}}
 {{end}}

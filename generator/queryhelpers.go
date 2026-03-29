@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func querySelect(columns map[string]Column) string {
+func querySelect(columns map[string]Column, softDelete bool) string {
 	result := "id, version, "
 
 	var names []string
@@ -21,6 +21,12 @@ func querySelect(columns map[string]Column) string {
 	}
 
 	result += "created, updated"
+
+	// Inject deleted_at if soft deletes are enabled
+	if softDelete {
+		result += ", deleted_at"
+	}
+
 	return result
 }
 
@@ -76,15 +82,19 @@ query = SELECT * FROM `posts` WHERE
 	AND id < ?  # Pagination if descending is true and startId != 0
 	AND id > ?  # Pagination if descending is false and startId != 0
 */
-func listWhereQuery(isStartIdZero bool, list ListConfig) string {
+func listWhereQuery(isStartIdZero bool, list ListConfig, softDelete bool) string {
 	result := ""
 	// if we have custom where clause
 	if strings.TrimSpace(list.Where) != "" {
+		result += "(" + replaceParams(list.Where) + ")"
+	}
+
+	// Inject the soft delete scope
+	if softDelete {
 		if result != "" {
-			result += " AND " + replaceParams(list.Where)
-		} else {
-			result += replaceParams(list.Where)
+			result += " AND "
 		}
+		result += "deleted_at IS NULL"
 	}
 
 	if list.Descending && !isStartIdZero && strings.TrimSpace(list.Order) != "" {
@@ -102,11 +112,11 @@ func listWhereQuery(isStartIdZero bool, list ListConfig) string {
 	return result
 }
 
-func listQuery(isStartIdZero bool, entityName string, list ListConfig, columns map[string]Column) string {
+func listQuery(isStartIdZero bool, entityName string, list ListConfig, columns map[string]Column, softDelete bool) string {
 	result := ""
-	where := listWhereQuery(isStartIdZero, list)
+	where := listWhereQuery(isStartIdZero, list, softDelete)
 
-	result = fmt.Sprintf("SELECT %s FROM %ss", querySelect(columns), SnakeCaser(entityName))
+	result = fmt.Sprintf("SELECT %s FROM %ss", querySelect(columns, softDelete), SnakeCaser(entityName))
 	if where != "" {
 		result += fmt.Sprintf(" WHERE %s", where)
 	}
@@ -126,9 +136,9 @@ func listQuery(isStartIdZero bool, entityName string, list ListConfig, columns m
 	return result
 }
 
-func countQuery(entityName string, list ListConfig, columns map[string]Column) string {
+func countQuery(entityName string, list ListConfig, columns map[string]Column, softDelete bool) string {
 	result := ""
-	where := listWhereQuery(true, list)
+	where := listWhereQuery(true, list, softDelete)
 
 	result = fmt.Sprintf("SELECT count(*) FROM %ss", SnakeCaser(entityName))
 	if where != "" {
