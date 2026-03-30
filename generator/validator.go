@@ -110,6 +110,7 @@ func validateColumns(columns map[string]Column) []string {
 // validateOperationConfig validates Gets and Lists in operations.
 // For Gets: each referenced column must exist and be marked as unique.
 // For Lists: it calls validateListConfigs.
+// validateOperationConfig validates Gets, Lists, and Deletes in operations.
 func validateOperationConfig(ops OperationConfig, columns map[string]Column) []string {
 	var errs []string
 	// Validate Gets.
@@ -123,6 +124,36 @@ func validateOperationConfig(ops OperationConfig, columns map[string]Column) []s
 	}
 	// Validate Lists.
 	errs = append(errs, validateListConfigs(ops.Lists, columns)...)
+
+	// Validate Deletes.
+	errs = append(errs, validateDeleteConfigs(ops.Deletes, columns)...) // <-- NEW
+
+	return errs
+}
+
+// validateDeleteConfigs validates each delete config.
+func validateDeleteConfigs(deletes []DeleteConfig, columns map[string]Column) []string {
+	var errs []string
+	allowedDefaults := map[string]bool{"created": true, "id": true, "updated": true}
+
+	for _, del := range deletes {
+		if len(del.Name) <= 4 {
+			errs = append(errs, fmt.Sprintf("delete name '%s' must be longer than 4 characters", del.Name))
+		}
+		if strings.Contains(del.Name, " ") {
+			errs = append(errs, fmt.Sprintf("delete name '%s' must not contain spaces", del.Name))
+		}
+		if !isSnakeCase(del.Name) {
+			errs = append(errs, fmt.Sprintf("delete name '%s' must be in snake_case. eg. delete_expired", del.Name))
+		}
+
+		// Validate TypeMapping targets exist
+		for paramName, mappedCol := range del.TypeMapping {
+			if _, exists := columns[mappedCol]; !exists && !allowedDefaults[mappedCol] {
+				errs = append(errs, fmt.Sprintf("typeMapping column '%s' for param '%s' in delete '%s' is not defined", mappedCol, paramName, del.Name))
+			}
+		}
+	}
 	return errs
 }
 

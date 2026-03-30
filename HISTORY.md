@@ -1,5 +1,8 @@
 # Version History
 
+## v1.3.5 - 2026-03-30
+  - deletes section in yaml for allowing bulk deletes
+
 ## v1.3.4 - 2026-03-28
   - softDelete feature added to dal layer
 

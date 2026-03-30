@@ -5,8 +5,10 @@ type CacheProvider interface {
 	Connect() error
 	InvalidateCache(entityName, cacheKey string) error
 	FlushListCache(entityName string) error
+	FlushItemCache(entityName string) error
 	OnCacheInvalidated(entityName string, handler func(string))
 	OnCacheFlushList(entityName string, handler func())
+	OnCacheFlushItem(entityName string, handler func())
 	Close()
 }
 
@@ -28,5 +30,10 @@ func (d NoopCacheProvider) FlushListCache(entityName string) error {
 	return nil
 }
 
+func (d NoopCacheProvider) FlushItemCache(entityName string) error { // <-- NEW
+	return nil
+}
+
 func (d NoopCacheProvider) OnCacheInvalidated(entityName string, handler func(string)) {}
 func (d NoopCacheProvider) OnCacheFlushList(entityName string, handler func())         {}
+func (d NoopCacheProvider) OnCacheFlushItem(entityName string, handler func())         {} // <--

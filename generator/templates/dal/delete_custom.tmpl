@@ -1,0 +1,66 @@
+{{define "delete_custom"}}
+{{$entityTableName := .Name}}
+{{$repoName := print (camelCase .Name) "Repository"}}
+
+{{range .Operations.Deletes}}
+// {{.Name | pascalCase}} executes a custom bulk delete operation.
+func (d *{{$repoName}}) {{.Name | pascalCase}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error) {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return 0, ErrOperationBlocked
+    }
+
+    const operation = "{{.Name}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+        return d.{{.Name | camelCase}}(ctx, {{deleteFuncCallParams .}})
+    })
+
+    if err != nil {
+        return 0, err
+    }
+
+    // A bulk delete alters the state of the database underneath the cache.
+    // We MUST flush all caches to prevent stale single items and lists.
+    d.FlushAllCache() 
+
+    return result.(int64), nil
+}
+
+func (d *{{$repoName}}) {{.Name | camelCase}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error) {
+    const operation = "{{.Name}}"
+    dbStart := time.Now()
+
+    query := `{{deleteQuery $entityTableName .}}`
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName | camelCase}}", true)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, dbErr
+    }
+
+    {{$callParams := deleteQueryParams .}}
+    {{if $callParams}}
+    res, err := db.ExecContext(ctx, query, {{$callParams}})
+    {{else}}
+    res, err := db.ExecContext(ctx, query)
+    {{end}}
+    
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to execute custom delete %s: %w", operation, err)
+    }
+
+    rowsAffected, err := res.RowsAffected()
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to get rows affected: %w", err)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+    
+    return rowsAffected, nil
+}
+{{end}}
+{{end}}

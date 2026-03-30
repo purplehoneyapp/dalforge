@@ -368,3 +368,74 @@ func countCacheKey(entityName string, list ListConfig, columns map[string]Column
 		return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 	}
 }
+
+// deleteQuery generates the raw SQL for a custom bulk delete operation.
+// Example Output: DELETE FROM refresh_tokens WHERE expires_at < ? OR (revoked = 1 AND updated < ?)
+func deleteQuery(entityName string, del DeleteConfig) string {
+	where := ""
+	if strings.TrimSpace(del.Where) != "" {
+		where = replaceParams(del.Where)
+	}
+
+	result := fmt.Sprintf("DELETE FROM %ss", SnakeCaser(entityName))
+	if where != "" {
+		result += fmt.Sprintf(" WHERE %s", where)
+	}
+
+	return result
+}
+
+// deleteFuncParams generates the typed arguments for the Go function signature.
+// Example Output: cutoff time.Time, status bool
+func deleteFuncParams(del DeleteConfig, columns map[string]Column) (string, error) {
+	result := ""
+	params := extractUniqueParams(del.Where) // Deduplicated parameters!
+
+	for _, param := range params {
+		colName := param
+		if mappedCol, ok := del.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+
+		var goType string
+
+		// Handle built-in default columns that aren't explicitly in the columns map
+		if colName == "id" {
+			goType = "int64"
+		} else if colName == "created" || colName == "updated" {
+			goType = "time.Time"
+		} else if col, ok := columns[colName]; ok {
+			goType = toGoType(col.Type, col.AllowNull)
+		} else {
+			return "", fmt.Errorf("dal yaml definition error: missing column %s, which is used in where under delete %s", colName, del.Name)
+		}
+
+		result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
+	}
+
+	return strings.TrimSuffix(result, ", "), nil
+}
+
+// deleteFuncCallParams generates the comma-separated variables passed as function call
+// Example Output: cutoff, status
+func deleteFuncCallParams(del DeleteConfig) string {
+	result := ""
+	params := extractUniqueParams(del.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+
+	return strings.TrimSuffix(result, ", ")
+}
+
+// deleteQueryParams generates the comma-separated variables passed to db.ExecContext.
+// Example Output: cutoff, status
+func deleteQueryParams(del DeleteConfig) string {
+	result := ""
+	params := extractParams(del.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+
+	return strings.TrimSuffix(result, ", ")
+}

@@ -2,7 +2,9 @@ CREATE TABLE posts (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     version INT DEFAULT 0,
     deleted BOOLEAN NOT NULL,
+    expires_at DATETIME NOT NULL,
     post text NOT NULL,
+    revoked BOOLEAN NOT NULL,
     target_age TINYINT NOT NULL,
     
     created TIMESTAMP,
@@ -12,8 +14,8 @@ CREATE TABLE posts (
 # Unique indexes as they serve Get operations returning single entity
 
 # Indexes that serve all the list operations
-CREATE INDEX idx_target_age ON posts (target_age);
 CREATE INDEX idx_deleted ON posts (deleted);
+CREATE INDEX idx_target_age ON posts (target_age);
 CREATE INDEX idx_created ON posts (created);
 
 

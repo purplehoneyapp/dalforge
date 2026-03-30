@@ -21,6 +21,7 @@ type RedisCacheProvider struct {
 	// handlers maps an entity name to its invalidation handler.
 	handlers          map[string]func(string)
 	flushListHandlers map[string]func()
+	flushItemHandlers map[string]func()
 	pubsubs           []*redis.PubSub // track active subscriptions
 	mu                sync.RWMutex
 
@@ -50,6 +51,7 @@ func NewRedisCacheProvider(addr, password string, db int, telemetry TelemetryPro
 		cancel:            cancel,
 		handlers:          make(map[string]func(string)),
 		flushListHandlers: make(map[string]func()),
+		flushItemHandlers: make(map[string]func()),
 		telemetry:         telemetry,
 	}
 
@@ -149,6 +151,38 @@ func (p *RedisCacheProvider) FlushListCache(entityName string) error {
 	return nil // Return immediately.
 }
 
+// FlushItemCache publishes a flush item message asynchronously (fire and forget).
+func (p *RedisCacheProvider) FlushItemCache(entityName string) error {
+	if p.isClosed {
+		p.telemetry.IncCachePubSubError(p.options.Addr)
+		return errors.New("cache provider is closed")
+	}
+
+	// Execute publish asynchronously.
+	go func() {
+		channel := fmt.Sprintf("cache_flush_item_%s", entityName)
+		message := entityName
+		maxRetries := 3
+		delay := 5 * time.Second
+
+		for i := 0; i < maxRetries; i++ {
+			err := p.client.Publish(p.ctx, channel, message).Err()
+			if err == nil {
+				p.telemetry.IncCachePubSubPublish(p.options.Addr)
+				log.Debugf("Published cache_flush_item: %s \n", entityName)
+				return
+			}
+
+			log.Errorf("Failed to publish cache_flush_item: %s. Retrying in %v...\n", entityName, delay)
+			time.Sleep(delay)
+		}
+
+		p.telemetry.IncCachePubSubError(p.options.Addr)
+		log.Errorf("Failed to publish cache_flush_item: %s after %d retries\n", entityName, maxRetries)
+	}()
+	return nil // Return immediately.
+}
+
 // OnCacheInvalidated registers a handler for a specific entity.
 func (p *RedisCacheProvider) OnCacheInvalidated(entityName string, handler func(string)) {
 	p.mu.Lock()
@@ -226,6 +260,48 @@ func (p *RedisCacheProvider) listenForFlushList(entityName string) {
 			p.telemetry.IncCachePubSubReceive(p.options.Addr)
 		} else {
 			log.Warnf("No cache_flush_list handler registered for entity: %s\n", entityName)
+		}
+	}
+}
+
+// OnCacheFlushItem registers a handler for an entity's flush_item event.
+func (p *RedisCacheProvider) OnCacheFlushItem(entityName string, handler func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, exists := p.flushItemHandlers[entityName]
+	if !exists {
+		p.flushItemHandlers[entityName] = handler
+		go p.listenForFlushItem(entityName)
+	}
+}
+
+// listenForFlushItem subscribes to an entity's cache_flush_item channel
+func (p *RedisCacheProvider) listenForFlushItem(entityName string) {
+	time.Sleep(2 * time.Second)
+	channel := fmt.Sprintf("cache_flush_item_%s", entityName)
+	pubsub := p.client.Subscribe(p.ctx, channel)
+
+	// Track the pubsub so we can close it later
+	p.mu.Lock()
+	p.pubsubs = append(p.pubsubs, pubsub)
+	p.mu.Unlock()
+
+	defer pubsub.Close()
+
+	// Process incoming messages in their own loop
+	log.Debugf("Listening for cache_flush_item messages for %s\n", entityName)
+	for range pubsub.Channel() {
+		log.Debugf("Got cache_flush_item message for %s\n", entityName)
+
+		p.mu.RLock()
+		handler, exists := p.flushItemHandlers[entityName]
+		p.mu.RUnlock()
+
+		if exists {
+			handler()
+			p.telemetry.IncCachePubSubReceive(p.options.Addr)
+		} else {
+			log.Warnf("No cache_flush_item handler registered for entity: %s\n", entityName)
 		}
 	}
 }

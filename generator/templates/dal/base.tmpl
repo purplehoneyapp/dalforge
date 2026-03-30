@@ -55,6 +55,7 @@ type {{$entityStructName}}Repository interface {
 
     InvalidateCache(entity *{{$entityStructName}})
     FlushListCache()
+    FlushAllCache()
 
 {{- if and .Operations .Operations.Store}}
     Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error)
@@ -69,8 +70,6 @@ type {{$entityStructName}}Repository interface {
 {{- if and .Operations .Operations.SoftDelete}}
     HardDelete(ctx context.Context, entity *{{$entityStructName}}) error
 {{- end}}
-
-
 
 {{- if and .Operations .Operations.Gets }}
     {{- range .Operations.Gets }}
@@ -87,6 +86,10 @@ type {{$entityStructName}}Repository interface {
     Count{{pascalCase .Name}}(ctx context.Context, {{countFuncParams . $.Columns}}) (int64, error)
     {{- end }}
 {{- end }}
+
+{{range .Operations.Deletes}}
+    {{pascalCase .Name}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error)
+{{end}}
 }
 
 type {{$entityArgumentName}}Repository struct {
@@ -167,6 +170,7 @@ func New{{$entityStructName}}Repository(
     // initialize cache invalidation handler
     cacheProvider.OnCacheInvalidated("{{$entityTableName}}", newDAL.onCacheInvalidated)
     cacheProvider.OnCacheFlushList("{{$entityTableName}}", newDAL.onCacheFlushList)
+    cacheProvider.OnCacheFlushItem("{{$entityTableName}}", newDAL.onCacheFlushItem)
 
     return newDAL
 }
@@ -209,3 +213,5 @@ func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
 {{template "count_operation" (dict "Root" $ "List" .)}}
     {{- end }}
 {{- end }}
+
+{{template "delete_custom" .}}

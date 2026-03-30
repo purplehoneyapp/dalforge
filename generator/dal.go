@@ -54,6 +54,10 @@ func NewGenerator() (*Generator, error) {
 		"invalidateUniqueColumnsCache": invalidateUniqueColumnsCache,
 		"hasJSONColumn":                hasJSONColumn,
 		"uniqueStringColumns":          uniqueStringColumns,
+		"deleteQuery":                  deleteQuery,
+		"deleteFuncParams":             deleteFuncParams,
+		"deleteFuncCallParams":         deleteFuncCallParams,
+		"deleteQueryParams":            deleteQueryParams,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")
@@ -187,11 +191,19 @@ type Column struct {
 }
 
 type OperationConfig struct {
-	Gets       []string     `yaml:"gets"`
-	Lists      []ListConfig `yaml:"lists"`
-	Store      bool         `yaml:"store"`
-	Delete     bool         `yaml:"delete"`
-	SoftDelete bool         `yaml:"softDelete"`
+	Gets       []string       `yaml:"gets"`
+	Lists      []ListConfig   `yaml:"lists"`
+	Deletes    []DeleteConfig `yaml:"deletes"`
+	Store      bool           `yaml:"store"`
+	Delete     bool           `yaml:"delete"`
+	SoftDelete bool           `yaml:"softDelete"`
+}
+
+// DeleteConfig mirrors ListConfig but is tailored for bulk deletion operations
+type DeleteConfig struct {
+	Name        string            `yaml:"name"`
+	Where       string            `yaml:"where"`
+	TypeMapping map[string]string `yaml:"typeMapping"`
 }
 
 type ListConfig struct {

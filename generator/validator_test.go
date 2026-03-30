@@ -31,6 +31,15 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 					},
 				},
 			},
+			Deletes: []DeleteConfig{
+				{
+					Name:  "delete_expired",
+					Where: "created < :cutoff",
+					TypeMapping: map[string]string{
+						"cutoff": "created",
+					},
+				},
+			},
 			Store:  true,
 			Delete: true,
 		},
@@ -91,6 +100,17 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 					},
 				},
 			},
+			Deletes: []DeleteConfig{
+				{
+					Name: "del", // error: too short
+				},
+				{
+					Name: "delete invalid mapping", // error: spaces, not snake_case
+					TypeMapping: map[string]string{
+						"badParam": "ghost_column", // error: ghost_column doesn't exist
+					},
+				},
+			},
 			Store:  true,
 			Delete: true,
 		},
@@ -134,6 +154,10 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		"maxItemsCount must be greater than 10",
 		"consecutiveFailures should be 1 or more",
 		"timeoutSeconds should be 1 or more",
+		"delete name 'del' must be longer than 4 characters",
+		"delete name 'delete invalid mapping' must not contain spaces",
+		"delete name 'delete invalid mapping' must be in snake_case",
+		"typeMapping column 'ghost_column' for param 'badParam' in delete 'delete invalid mapping' is not defined",
 	}
 
 	for _, expectedError := range expectedErrors {

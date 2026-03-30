@@ -21,6 +21,24 @@ func (d *{{$entityArgumentName}}Repository) FlushListCache() {
     {{- end}}
 }
 
+// FlushAllCache clears both list/count caches AND single-item caches locally, 
+// and broadcasts the flush to other instances.
+func (d *{{$entityArgumentName}}Repository) FlushAllCache() {
+	d.cache.Flush()
+    {{- if eq .Root.Caching.ListInvalidation "flush"}}
+	d.listCache.Flush()
+	d.countCache.Flush()
+
+	// Invalidate cache entries across instances
+	d.cacheProvider.FlushListCache("{{$entityTableName}}")
+    {{- end}}
+	d.cacheProvider.FlushItemCache("{{$entityTableName}}")
+}
+
+// Handles cache_flush_item. Just clears the single items cache locally.
+func (d *{{$entityArgumentName}}Repository) onCacheFlushItem() {
+	d.cache.Flush()
+}
 
 // Handles cache invalidations. Just remove cached entry by key
 func (d *{{$entityArgumentName}}Repository) onCacheInvalidated(key string) {

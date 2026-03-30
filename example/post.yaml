@@ -7,6 +7,10 @@ columns:
     type: text
   deleted:
     type: bool
+  expires_at: 
+    type: datetime
+  revoked: 
+    type: bool
 operations:
   store: true
   delete: true
@@ -17,6 +21,11 @@ operations:
       where: deleted = 0 and target_age = :target_age # use :col_name to make it an argument of a function
       order: created
       descending: true
+  deletes:
+    - name: delete_expired
+      where: "expires_at < :cutoff OR (revoked = true AND updated < :cutoff)"
+      typeMapping:
+        cutoff: expires_at
 circuitbreaker:
     timeoutSeconds: 30 # how long to wait while in open state before trying to go to half open state.
     consecutiveFailures: 5 # how many times to fail in an closed state before we swithc to open state

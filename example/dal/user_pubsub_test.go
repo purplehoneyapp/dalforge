@@ -16,12 +16,14 @@ import (
 type FakeCacheProvider struct {
 	invalidationCallbacks map[string]func(string)
 	flushCallbacks        map[string]func()
+	flushItemCallbacks    map[string]func() // <-- NEW: Added to track flush item handlers
 }
 
 func NewFakeCacheProvider() *FakeCacheProvider {
 	return &FakeCacheProvider{
 		invalidationCallbacks: make(map[string]func(string)),
 		flushCallbacks:        make(map[string]func()),
+		flushItemCallbacks:    make(map[string]func()), // <-- NEW: Initialize the map
 	}
 }
 
@@ -53,6 +55,19 @@ func (f *FakeCacheProvider) FlushListCache(entityName string) error {
 		callback()
 	}
 	return nil
+}
+
+// <-- NEW: Implement the FlushItemCache method
+func (f *FakeCacheProvider) FlushItemCache(entityName string) error {
+	if callback, ok := f.flushItemCallbacks[entityName]; ok {
+		callback()
+	}
+	return nil
+}
+
+// <-- NEW: Implement the OnCacheFlushItem method
+func (f *FakeCacheProvider) OnCacheFlushItem(entityName string, handler func()) {
+	f.flushItemCallbacks[entityName] = handler
 }
 
 // SimulateCacheInvalidation is a helper to simulate a pub/sub invalidation event.
