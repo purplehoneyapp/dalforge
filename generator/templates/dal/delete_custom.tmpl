@@ -1,37 +1,49 @@
 {{define "delete_custom"}}
 {{$entityTableName := .Name}}
 {{$repoName := print (camelCase .Name) "Repository"}}
+{{$softDelete := .Operations.SoftDelete}}
+{{$columns := .Columns}}
 
 {{range .Operations.Deletes}}
-// {{.Name | pascalCase}} executes a custom bulk delete operation.
-func (d *{{$repoName}}) {{.Name | pascalCase}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error) {
+{{$delName := .Name}}
+{{$delNamePascal := pascalCase .Name}}
+{{$delNameCamel := camelCase .Name}}
+{{$funcParams := deleteFuncParams . $columns}}
+{{$funcCallParams := deleteFuncCallParams .}}
+{{$queryParams := deleteQueryParams .}}
+
+// {{$delNamePascal}} executes a custom bulk delete operation.
+func (d *{{$repoName}}) {{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return 0, ErrOperationBlocked
     }
 
-    const operation = "{{.Name}}"
+    const operation = "{{$delName}}"
     d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
     result, err := d.dbBreaker.Execute(func() (interface{}, error) {
-        return d.{{.Name | camelCase}}(ctx, {{deleteFuncCallParams .}})
+        return d.{{$delNameCamel}}(ctx{{if $funcCallParams}}, {{$funcCallParams}}{{end}})
     })
 
     if err != nil {
         return 0, err
     }
 
-    // A bulk delete alters the state of the database underneath the cache.
-    // We MUST flush all caches to prevent stale single items and lists.
-    d.FlushAllCache() 
+    rowsAffected := result.(int64)
+    
+    // Only flush caches if the database state actually changed
+    if rowsAffected > 0 {
+        d.FlushAllCache() 
+    }
 
-    return result.(int64), nil
+    return rowsAffected, nil
 }
 
-func (d *{{$repoName}}) {{.Name | camelCase}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error) {
-    const operation = "{{.Name}}"
+func (d *{{$repoName}}) {{$delNameCamel}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
+    const operation = "{{$delName}}"
     dbStart := time.Now()
 
-    query := `{{deleteQuery $entityTableName .}}`
+    query := `{{deleteQuery $entityTableName . $columns $softDelete false}}`
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName | camelCase}}", true)
     if dbErr != nil {
@@ -39,9 +51,8 @@ func (d *{{$repoName}}) {{.Name | camelCase}}(ctx context.Context, {{deleteFuncP
         return 0, dbErr
     }
 
-    {{$callParams := deleteQueryParams .}}
-    {{if $callParams}}
-    res, err := db.ExecContext(ctx, query, {{$callParams}})
+    {{if $queryParams}}
+    res, err := db.ExecContext(ctx, query, {{$queryParams}})
     {{else}}
     res, err := db.ExecContext(ctx, query)
     {{end}}
@@ -62,5 +73,70 @@ func (d *{{$repoName}}) {{.Name | camelCase}}(ctx context.Context, {{deleteFuncP
     
     return rowsAffected, nil
 }
+
+{{if $softDelete}}
+// Hard{{$delNamePascal}} executes a permanent custom bulk delete operation.
+func (d *{{$repoName}}) Hard{{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return 0, ErrOperationBlocked
+    }
+
+    const operation = "hard_{{$delName}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+        return d.hard{{$delNamePascal}}(ctx{{if $funcCallParams}}, {{$funcCallParams}}{{end}})
+    })
+
+    if err != nil {
+        return 0, err
+    }
+
+    rowsAffected := result.(int64)
+    
+    // Only flush caches if the database state actually changed
+    if rowsAffected > 0 {
+        d.FlushAllCache() 
+    }
+
+    return rowsAffected, nil
+}
+
+func (d *{{$repoName}}) hard{{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
+    const operation = "hard_{{$delName}}"
+    dbStart := time.Now()
+
+    query := `{{deleteQuery $entityTableName . $columns $softDelete true}}`
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName | camelCase}}", true)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, dbErr
+    }
+
+    {{if $queryParams}}
+    res, err := db.ExecContext(ctx, query, {{$queryParams}})
+    {{else}}
+    res, err := db.ExecContext(ctx, query)
+    {{end}}
+    
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to execute custom hard delete %s: %w", operation, err)
+    }
+
+    rowsAffected, err := res.RowsAffected()
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to get rows affected: %w", err)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+    
+    return rowsAffected, nil
+}
+{{end}}
+
 {{end}}
 {{end}}

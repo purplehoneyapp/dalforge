@@ -42,6 +42,9 @@ operations:
     - name: list_by_status
       where: status = :status
       order: created
+  deletes: 
+    - name: delete_older
+      where: age > :age
 circuitbreaker:
   timeoutSeconds: 20             # how long to wait while in open state before trying to go to half open state.
   consecutiveFailures: 4         # how many times to fail in an closed state before we swithc to open state

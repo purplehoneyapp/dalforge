@@ -87,8 +87,13 @@ type {{$entityStructName}}Repository interface {
     {{- end }}
 {{- end }}
 
+{{- $softDelete := .Operations.SoftDelete -}}
 {{range .Operations.Deletes}}
-    {{pascalCase .Name}}(ctx context.Context, {{deleteFuncParams . $.Columns}}) (int64, error)
+    {{- $funcParams := deleteFuncParams . $.Columns}}
+    {{pascalCase .Name}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error)
+    {{- if $softDelete}}
+    Hard{{pascalCase .Name}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error)
+    {{- end}}
 {{end}}
 }
 

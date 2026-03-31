@@ -784,3 +784,136 @@ func TestUserSoftAndHardDelete(t *testing.T) {
 		assert.Equal(t, 0, count, "Row should be completely removed from the database after HardDelete")
 	})
 }
+
+func TestCustomBulkDeletes(t *testing.T) {
+	t.Run("TestBulkSoftAndHardDeletes", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		userDAL := NewUserRepository(
+			dbProvider,
+			nil, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{},
+		)
+		ctx := context.Background()
+
+		// 1. Seed database with users of varying ages
+		ages := []int8{20, 25, 30, 35, 40}
+		for _, age := range ages {
+			_, err := userDAL.Create(ctx, &User{
+				Age:       age,
+				Email:     fmt.Sprintf("user_age_%d@example.com", age),
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
+			})
+			assert.NoError(t, err)
+		}
+
+		// 2. Test Soft Bulk Delete (DeleteOlder where age > 28)
+		// Expected to affect ages 30, 35, 40 (3 rows)
+		rowsAffected, err := userDAL.DeleteOlder(ctx, 28)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), rowsAffected)
+
+		// Verify DAL scoping (older users are hidden)
+		_, err = userDAL.GetByEmail(ctx, "user_age_35@example.com")
+		assert.ErrorIs(t, err, ErrNotFound)
+
+		// Verify raw Database state for a soft-deleted record
+		db, _ := dbProvider.GetDatabase("user", false)
+		var deletedAt sql.NullTime
+		var scrambledEmail string
+		err = db.QueryRow("SELECT deleted_at, email FROM users WHERE age = 35").Scan(&deletedAt, &scrambledEmail)
+		assert.NoError(t, err)
+		assert.True(t, deletedAt.Valid, "deleted_at should be populated")
+		assert.Contains(t, scrambledEmail, "-del-", "email should be scrambled")
+
+		// Verify raw Database state for an unaffected record
+		err = db.QueryRow("SELECT deleted_at, email FROM users WHERE age = 25").Scan(&deletedAt, &scrambledEmail)
+		assert.NoError(t, err)
+		assert.False(t, deletedAt.Valid, "younger users should not be deleted")
+		assert.Equal(t, "user_age_25@example.com", scrambledEmail)
+
+		// 3. Test Zero-Row Optimization
+		// Running the same delete again should yield 0 affected rows because of the `deleted_at IS NULL` scope
+		rowsAffected, err = userDAL.DeleteOlder(ctx, 28)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), rowsAffected, "Already deleted records should be ignored")
+
+		// 4. Test Hard Bulk Delete (HardDeleteOlder where age > 22)
+		// Expected to affect age 25 (active) AND ages 30, 35, 40 (soft-deleted).
+		// Hard deletes bypass the `deleted_at IS NULL` check.
+		rowsAffected, err = userDAL.HardDeleteOlder(ctx, 22)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(4), rowsAffected)
+
+		// Verify raw Database state (only age 20 should remain in the table entirely)
+		var count int
+		err = db.QueryRow("SELECT count(*) FROM users").Scan(&count)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count, "Only the 20-year-old user should remain in the table")
+	})
+}
+
+func TestSmartUpsertStore(t *testing.T) {
+	t.Run("TestStoreUpsertBehavior", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		userDAL := NewUserRepository(
+			dbProvider,
+			nil, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{},
+		)
+		ctx := context.Background()
+
+		originalEmail := "upsert_test@example.com"
+
+		// 1. Initial Store (Creates the record)
+		newUser := &User{
+			Age:       25,
+			Email:     originalEmail,
+			Status:    Ptr("active"),
+			Birthdate: Ptr(time.Now()),
+		}
+
+		created, err := userDAL.Store(ctx, newUser)
+		assert.NoError(t, err)
+		assert.NotZero(t, created.ID, "Store should create a new ID if user doesn't exist")
+		assert.Equal(t, int32(0), created.Version)
+
+		// 2. Smart Upsert via Email
+		// Because dalforge performs a full row replacement on Update,
+		// we must supply the full entity state.
+		updatePayload := &User{
+			ID:    0, // ID is explicitly missing
+			Email: originalEmail,
+			Age:   30, // Updating the age
+			// We must preserve existing fields so they aren't overwritten with zero-values
+			Uid:       created.Uid,
+			Status:    created.Status,
+			Birthdate: created.Birthdate,
+		}
+
+		updated, err := userDAL.Store(ctx, updatePayload)
+		assert.NoError(t, err)
+		assert.Equal(t, created.ID, updated.ID, "Store should resolve the missing ID via the unique Email")
+		assert.Equal(t, int8(30), updated.Age, "Store should successfully update the age")
+		assert.Equal(t, int32(1), updated.Version, "Version should be incremented")
+
+		// 3. Smart Upsert via UID
+		uidPayload := &User{
+			ID:     0,
+			Uid:    updated.Uid,     // Resolving via UID this time
+			Status: Ptr("inactive"), // Updating status
+			// Preserve existing fields
+			Email:     updated.Email,
+			Age:       updated.Age,
+			Birthdate: updated.Birthdate,
+		}
+
+		finalUpdate, err := userDAL.Store(ctx, uidPayload)
+		assert.NoError(t, err)
+		assert.Equal(t, created.ID, finalUpdate.ID, "Store should resolve the missing ID via the unique UID")
+		assert.Equal(t, "inactive", *finalUpdate.Status)
+		assert.Equal(t, int32(2), finalUpdate.Version)
+	})
+}

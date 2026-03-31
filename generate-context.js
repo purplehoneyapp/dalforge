@@ -31,7 +31,7 @@ const IGNORE_DIRS = new Set([
 ]);
 
 // 4. File extensions to include in the Content Dump
-const VALID_EXTENSIONS = ['.ts', '.tsx', '.js', '.json', '.md', '.go', '.yaml', '.yml'];
+const VALID_EXTENSIONS = ['.ts', '.tsx', '.js', '.json', '.md', '.go', '.yaml', '.yml', '.tmpl'];
 
 
 /* ========================================================================

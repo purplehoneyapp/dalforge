@@ -370,13 +370,32 @@ func countCacheKey(entityName string, list ListConfig, columns map[string]Column
 }
 
 // deleteQuery generates the raw SQL for a custom bulk delete operation.
-// Example Output: DELETE FROM refresh_tokens WHERE expires_at < ? OR (revoked = 1 AND updated < ?)
-func deleteQuery(entityName string, del DeleteConfig) string {
+// It handles both soft deletes (via UPDATE) and hard deletes (via DELETE FROM).
+func deleteQuery(entityName string, del DeleteConfig, columns map[string]Column, softDelete bool, isHardDelete bool) string {
 	where := ""
 	if strings.TrimSpace(del.Where) != "" {
 		where = replaceParams(del.Where)
 	}
 
+	// Soft Delete Logic
+	if softDelete && !isHardDelete {
+		result := fmt.Sprintf("UPDATE %ss SET deleted_at = NOW(), updated = NOW(), version = version + 1", SnakeCaser(entityName))
+
+		// Scramble unique string columns to free up the unique constraint
+		uniqueCols := uniqueStringColumns(columns)
+		for _, col := range uniqueCols {
+			result += fmt.Sprintf(", %s = CONCAT(%s, '-del-', UUID())", col, col)
+		}
+
+		if where != "" {
+			result += fmt.Sprintf(" WHERE (%s) AND deleted_at IS NULL", where)
+		} else {
+			result += " WHERE deleted_at IS NULL"
+		}
+		return result
+	}
+
+	// Hard Delete Logic
 	result := fmt.Sprintf("DELETE FROM %ss", SnakeCaser(entityName))
 	if where != "" {
 		result += fmt.Sprintf(" WHERE %s", where)
