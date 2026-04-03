@@ -213,6 +213,7 @@ func listFuncCallParams(isStartIdZero bool, list ListConfig, columns map[string]
 	result := ""
 	params := extractUniqueParams(list.Where)
 	for _, param := range params {
+
 		result += fmt.Sprintf("%s, ", CamelCaser(param))
 	}
 
@@ -268,11 +269,20 @@ func listFuncParams(list ListConfig, columns map[string]Column) (string, error) 
 			colName = mappedCol
 		}
 
-		col, ok := columns[colName]
-		if !ok {
+		var goType string
+
+		// Handle built-in default columns that aren't explicitly in the columns map
+		if colName == "id" {
+			goType = "int64"
+		} else if colName == "created" || colName == "updated" {
+			goType = "time.Time"
+		} else if col, ok := columns[colName]; ok {
+			goType = toGoType(col.Type, col.AllowNull)
+		} else {
 			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", colName, list.Name)
 		}
-		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
+
+		result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
 	}
 
 	result += "startID int64, pageSize int"
@@ -292,11 +302,20 @@ func countFuncParams(list ListConfig, columns map[string]Column) (string, error)
 			colName = mappedCol
 		}
 
-		col, ok := columns[colName]
-		if !ok {
-			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under list %s", colName, list.Name)
+		var goType string
+
+		// Handle built-in default columns that aren't explicitly in the columns map
+		if colName == "id" {
+			goType = "int64"
+		} else if colName == "created" || colName == "updated" {
+			goType = "time.Time"
+		} else if col, ok := columns[colName]; ok {
+			goType = toGoType(col.Type, col.AllowNull)
+		} else {
+			return "", fmt.Errorf("dal yaml definition error. missing column %s, which is used in where under count list %s", colName, list.Name)
 		}
-		result += fmt.Sprintf("%s %s, ", CamelCaser(param), toGoType(col.Type, col.AllowNull))
+
+		result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
 	}
 
 	return strings.TrimSuffix(result, ", "), nil

@@ -1,5 +1,8 @@
 # Version History
 
+## v1.3.6 - 2026-04-03 
+  - fixed bug to allow created/updated columns in where of lists
+
 ## v1.3.5 - 2026-03-30
   - deletes section in yaml for allowing bulk deletes
 
