@@ -57,11 +57,10 @@ type {{$entityStructName}}Repository interface {
     FlushListCache()
     FlushAllCache()
 
-{{- if and .Operations .Operations.Store}}
+{{- if and .Operations .Operations.Write}}
     Create(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error)
     CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error)
     Update(ctx context.Context, entity *{{$entityStructName}}) error
-    Store(ctx context.Context, entity *{{$entityStructName}}) (*{{$entityStructName}}, error)
 {{- end}}
 
 {{- if and .Operations .Operations.Delete}}
@@ -187,11 +186,10 @@ func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
 {{template "invalidate_cache" (dict "Root" $ "ColumnName" "id")}}
 {{template "create_table" (dict "Root" $ "ColumnName" "id")}}
 
-{{- if and .Operations .Operations.Store}}
+{{- if and .Operations .Operations.Write}}
 {{template "create" (dict "Root" $ "ColumnName" "id")}}
 {{template "create_bulk" (dict "Root" $ "ColumnName" "id")}}
 {{template "update" (dict "Root" $ "ColumnName" "id")}}
-{{template "store" (dict "Root" $ "ColumnName" "id")}}
 {{- end}}
 
 {{- if and .Operations .Operations.Delete}}

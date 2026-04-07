@@ -1,5 +1,8 @@
 # Version History
 
+## v1.4.0 - 2026-04-06
+  - removed Store methods as they can cause a lot of problems in distributed setup; for entities with multiple unique keys.
+
 ## v1.3.6 - 2026-04-03 
   - fixed bug to allow created/updated columns in where of lists
 

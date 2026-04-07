@@ -194,7 +194,7 @@ type OperationConfig struct {
 	Gets       []string       `yaml:"gets"`
 	Lists      []ListConfig   `yaml:"lists"`
 	Deletes    []DeleteConfig `yaml:"deletes"`
-	Store      bool           `yaml:"store"`
+	Write      bool           `yaml:"write"`
 	Delete     bool           `yaml:"delete"`
 	SoftDelete bool           `yaml:"softDelete"`
 }

@@ -12,7 +12,7 @@ columns:
   revoked: 
     type: bool
 operations:
-  store: true
+  write: true
   delete: true
   gets:
   lists:

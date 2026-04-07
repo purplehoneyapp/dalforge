@@ -40,7 +40,7 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 					},
 				},
 			},
-			Store:  true,
+			Write:  true,
 			Delete: true,
 		},
 		CircuitBreaker: CircuitBreakerConfig{
@@ -111,7 +111,7 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 					},
 				},
 			},
-			Store:  true,
+			Write:  true,
 			Delete: true,
 		},
 		CircuitBreaker: CircuitBreakerConfig{

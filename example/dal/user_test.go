@@ -1,4 +1,4 @@
-// user_test.gen.go
+// user_test.go
 package dal
 
 import (
@@ -367,9 +367,6 @@ func TestUserBlockedReadsAndWrites(t *testing.T) {
 		assert.ErrorIs(t, err, ErrOperationBlocked)
 
 		err = userDAL.Delete(ctx, newUser)
-		assert.ErrorIs(t, err, ErrOperationBlocked)
-
-		_, err = userDAL.Store(ctx, newUser)
 		assert.ErrorIs(t, err, ErrOperationBlocked)
 	})
 }
@@ -851,69 +848,5 @@ func TestCustomBulkDeletes(t *testing.T) {
 		err = db.QueryRow("SELECT count(*) FROM users").Scan(&count)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count, "Only the 20-year-old user should remain in the table")
-	})
-}
-
-func TestSmartUpsertStore(t *testing.T) {
-	t.Run("TestStoreUpsertBehavior", func(t *testing.T) {
-		setupTestDB(t)
-		defer teardownTestDB(t)
-
-		userDAL := NewUserRepository(
-			dbProvider,
-			nil, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{},
-		)
-		ctx := context.Background()
-
-		originalEmail := "upsert_test@example.com"
-
-		// 1. Initial Store (Creates the record)
-		newUser := &User{
-			Age:       25,
-			Email:     originalEmail,
-			Status:    Ptr("active"),
-			Birthdate: Ptr(time.Now()),
-		}
-
-		created, err := userDAL.Store(ctx, newUser)
-		assert.NoError(t, err)
-		assert.NotZero(t, created.ID, "Store should create a new ID if user doesn't exist")
-		assert.Equal(t, int32(0), created.Version)
-
-		// 2. Smart Upsert via Email
-		// Because dalforge performs a full row replacement on Update,
-		// we must supply the full entity state.
-		updatePayload := &User{
-			ID:    0, // ID is explicitly missing
-			Email: originalEmail,
-			Age:   30, // Updating the age
-			// We must preserve existing fields so they aren't overwritten with zero-values
-			Uid:       created.Uid,
-			Status:    created.Status,
-			Birthdate: created.Birthdate,
-		}
-
-		updated, err := userDAL.Store(ctx, updatePayload)
-		assert.NoError(t, err)
-		assert.Equal(t, created.ID, updated.ID, "Store should resolve the missing ID via the unique Email")
-		assert.Equal(t, int8(30), updated.Age, "Store should successfully update the age")
-		assert.Equal(t, int32(1), updated.Version, "Version should be incremented")
-
-		// 3. Smart Upsert via UID
-		uidPayload := &User{
-			ID:     0,
-			Uid:    updated.Uid,     // Resolving via UID this time
-			Status: Ptr("inactive"), // Updating status
-			// Preserve existing fields
-			Email:     updated.Email,
-			Age:       updated.Age,
-			Birthdate: updated.Birthdate,
-		}
-
-		finalUpdate, err := userDAL.Store(ctx, uidPayload)
-		assert.NoError(t, err)
-		assert.Equal(t, created.ID, finalUpdate.ID, "Store should resolve the missing ID via the unique UID")
-		assert.Equal(t, "inactive", *finalUpdate.Status)
-		assert.Equal(t, int32(2), finalUpdate.Version)
 	})
 }
