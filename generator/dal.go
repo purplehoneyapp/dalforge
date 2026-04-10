@@ -37,6 +37,7 @@ func NewGenerator() (*Generator, error) {
 		"keys":                         keys,
 		"sub":                          sub,
 		"add":                          add,
+		"pluralize":                    pluralize,
 		"querySelect":                  querySelect,
 		"goFuncCallParameters":         goFuncCallParameters,
 		"listQuery":                    listQuery,
@@ -58,6 +59,9 @@ func NewGenerator() (*Generator, error) {
 		"deleteFuncParams":             deleteFuncParams,
 		"deleteFuncCallParams":         deleteFuncCallParams,
 		"deleteQueryParams":            deleteQueryParams,
+		"bulkFuncParams":               bulkFuncParams,
+		"bulkUpdateFuncParams":         bulkUpdateFuncParams,
+		"bulkUpdateCallParams":         bulkUpdateCallParams,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")
@@ -190,13 +194,22 @@ type Column struct {
 	Prefix    string `yaml:"prefix"` //
 }
 
+// UpdateBulkConfig defines a bulk partial update operation
+type UpdateBulkConfig struct {
+	Name    string   `yaml:"name"`
+	Set     []string `yaml:"set"`
+	WhereIn string   `yaml:"whereIn"`
+}
+
 type OperationConfig struct {
-	Gets       []string       `yaml:"gets"`
-	Lists      []ListConfig   `yaml:"lists"`
-	Deletes    []DeleteConfig `yaml:"deletes"`
-	Write      bool           `yaml:"write"`
-	Delete     bool           `yaml:"delete"`
-	SoftDelete bool           `yaml:"softDelete"`
+	Gets        []string           `yaml:"gets"`
+	GetsBulk    []string           `yaml:"getsBulk"` // <-- NEW: For batch gets via IN clause
+	Lists       []ListConfig       `yaml:"lists"`
+	Deletes     []DeleteConfig     `yaml:"deletes"`
+	UpdatesBulk []UpdateBulkConfig `yaml:"updatesBulk"` // <-- NEW: For bulk partial updates
+	Write       bool               `yaml:"write"`
+	Delete      bool               `yaml:"delete"`
+	SoftDelete  bool               `yaml:"softDelete"`
 }
 
 // DeleteConfig mirrors ListConfig but is tailored for bulk deletion operations

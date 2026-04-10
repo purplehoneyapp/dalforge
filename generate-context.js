@@ -12,6 +12,10 @@ const CONTENT_TARGETS = [
   'generator',
   'generator/templates/dal',
   'generator/templates/sql',
+  'example',
+  'example/dal/user_test.go',
+  'example/dal/user_cb_test.go',
+  'example/dal/user_pubsub_test.go',
   'version',
   'main.go'
 ];

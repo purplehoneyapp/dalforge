@@ -122,12 +122,74 @@ func validateOperationConfig(ops OperationConfig, columns map[string]Column) []s
 			errs = append(errs, fmt.Sprintf("get operation requires column '%s' to be unique", colName))
 		}
 	}
+
+	// Validate GetsBulk (NEW)
+	errs = append(errs, validateGetsBulk(ops.GetsBulk, columns)...)
+
 	// Validate Lists.
 	errs = append(errs, validateListConfigs(ops.Lists, columns)...)
 
 	// Validate Deletes.
-	errs = append(errs, validateDeleteConfigs(ops.Deletes, columns)...) // <-- NEW
+	errs = append(errs, validateDeleteConfigs(ops.Deletes, columns)...)
 
+	// Validate UpdatesBulk (NEW)
+	errs = append(errs, validateUpdatesBulk(ops.UpdatesBulk, columns)...)
+
+	return errs
+}
+
+// validateGetsBulk ensures that columns used for bulk gets exist and are unique.
+func validateGetsBulk(getsBulk []string, columns map[string]Column) []string {
+	var errs []string
+	for _, colName := range getsBulk {
+		if colName == "id" {
+			continue // ID is perfectly fine to use for bulk gets
+		}
+		col, exists := columns[colName]
+		if !exists {
+			errs = append(errs, fmt.Sprintf("getsBulk operation refers to unknown column '%s'", colName))
+		} else if !col.Unique {
+			errs = append(errs, fmt.Sprintf("getsBulk operation requires column '%s' to be unique", colName))
+		}
+	}
+	return errs
+}
+
+// validateUpdatesBulk ensures bulk updates are configured correctly safely.
+func validateUpdatesBulk(updates []UpdateBulkConfig, columns map[string]Column) []string {
+	var errs []string
+
+	for _, upd := range updates {
+		// 1. Validate Name
+		if len(upd.Name) <= 4 {
+			errs = append(errs, fmt.Sprintf("updatesBulk name '%s' must be longer than 4 characters", upd.Name))
+		}
+		if strings.Contains(upd.Name, " ") {
+			errs = append(errs, fmt.Sprintf("updatesBulk name '%s' must not contain spaces", upd.Name))
+		}
+		if !isSnakeCase(upd.Name) {
+			errs = append(errs, fmt.Sprintf("updatesBulk name '%s' must be in snake_case", upd.Name))
+		}
+
+		// 2. Validate WhereIn column
+		if upd.WhereIn != "id" {
+			if _, exists := columns[upd.WhereIn]; !exists {
+				errs = append(errs, fmt.Sprintf("updatesBulk '%s' refers to unknown whereIn column '%s'", upd.Name, upd.WhereIn))
+			}
+		}
+
+		// 3. Validate Set columns
+		if len(upd.Set) == 0 {
+			errs = append(errs, fmt.Sprintf("updatesBulk '%s' must specify at least one column in 'set'", upd.Name))
+		}
+		for _, setCol := range upd.Set {
+			if setCol == "id" || setCol == "created" || setCol == "updated" {
+				errs = append(errs, fmt.Sprintf("updatesBulk '%s' cannot update reserved column '%s'", upd.Name, setCol))
+			} else if _, exists := columns[setCol]; !exists {
+				errs = append(errs, fmt.Sprintf("updatesBulk '%s' refers to unknown set column '%s'", upd.Name, setCol))
+			}
+		}
+	}
 	return errs
 }
 

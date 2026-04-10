@@ -850,3 +850,145 @@ func TestCustomBulkDeletes(t *testing.T) {
 		assert.Equal(t, 1, count, "Only the 20-year-old user should remain in the table")
 	})
 }
+
+func TestUserBulkGets(t *testing.T) {
+	t.Run("TestBulkGetOperations", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		userDAL := NewUserRepository(
+			dbProvider,
+			nil, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{},
+		)
+		ctx := context.Background()
+
+		// 1. Create a few users
+		var createdUsers []*User
+		var uids []string
+		var ids []int64
+
+		for i := 1; i <= 3; i++ {
+			u, err := userDAL.Create(ctx, &User{
+				Age:       int8(20 + i),
+				Email:     fmt.Sprintf("bulkget_%d@example.com", i),
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
+			})
+			assert.NoError(t, err)
+			createdUsers = append(createdUsers, u)
+			uids = append(uids, u.Uid)
+			ids = append(ids, u.ID)
+		}
+
+		// 2. Test GetByUids
+		fetchedByUids, err := userDAL.GetByUids(ctx, uids)
+		assert.NoError(t, err)
+		assert.Len(t, fetchedByUids, 3)
+
+		// 3. Test Caching for GetByUids
+		// First call should have resulted in cache misses and DB requests.
+		// Let's call it again to hit the cache.
+		_, err = userDAL.GetByUids(ctx, uids)
+		assert.NoError(t, err)
+
+		hits := testutil.ToFloat64(dalCacheHitsCounter.WithLabelValues("user", "get_bulk_by_uid"))
+		assert.Equal(t, 1.0, hits, "Expected 1 cache hit (for the entire bulk operation) on the second get by uid")
+
+		// 4. Test GetByIds
+		fetchedByIds, err := userDAL.GetByIds(ctx, ids)
+		assert.NoError(t, err)
+		assert.Len(t, fetchedByIds, 3)
+
+		// 5. Test Hard Limits
+		overLimitUids := make([]string, 5001)
+		_, err = userDAL.GetByUids(ctx, overLimitUids)
+		assert.ErrorContains(t, err, "exceeds maximum limit of 5000 items")
+
+		overLimitIds := make([]int64, 5001)
+		_, err = userDAL.GetByIds(ctx, overLimitIds)
+		assert.ErrorContains(t, err, "exceeds maximum limit of 5000 items")
+
+		// 6. Test Empty Slices
+		emptyRes, err := userDAL.GetByUids(ctx, []string{})
+		assert.NoError(t, err)
+		assert.Nil(t, emptyRes)
+	})
+}
+
+func TestUserBulkUpdates(t *testing.T) {
+	t.Run("TestBulkUpdateOperations", func(t *testing.T) {
+		setupTestDB(t)
+		defer teardownTestDB(t)
+
+		userDAL := NewUserRepository(
+			dbProvider,
+			nil, nil, gobreaker.Settings{}, PrometheusTelemetryProvider{},
+		)
+		ctx := context.Background()
+
+		// 1. Create a few users
+		var uidsToUpdate []string
+		var idsToUpdate []int64
+		var controlUser *User
+
+		for i := 1; i <= 3; i++ {
+			u, err := userDAL.Create(ctx, &User{
+				Age:       25,
+				Email:     fmt.Sprintf("bulkupdate_%d@example.com", i),
+				Status:    Ptr("active"),
+				Birthdate: Ptr(time.Now()),
+			})
+			assert.NoError(t, err)
+
+			if i < 3 {
+				uidsToUpdate = append(uidsToUpdate, u.Uid)
+				idsToUpdate = append(idsToUpdate, u.ID)
+			} else {
+				// Third user is our control to ensure we don't accidentally update everyone
+				controlUser = u
+			}
+		}
+
+		// 2. Pre-fetch to warm up the single-item cache specifically for these queries
+		_, err := userDAL.GetByUid(ctx, uidsToUpdate[0])
+		assert.NoError(t, err)
+		_, err = userDAL.GetByUid(ctx, controlUser.Uid)
+		assert.NoError(t, err)
+
+		// 3. Test UpdateStatusByUids
+		newStatus := "suspended"
+		err = userDAL.UpdateStatusByUids(ctx, &newStatus, uidsToUpdate)
+		assert.NoError(t, err)
+
+		// 4. Verify cache was flushed BEFORE we re-fetch the data
+		missesBefore := testutil.ToFloat64(dalCacheMissesCounter.WithLabelValues("user", "get_by_uid"))
+
+		// Fetch u1 to verify the update worked (this triggers the cache miss because of the flush)
+		u1, _ := userDAL.GetByUid(ctx, uidsToUpdate[0])
+		assert.Equal(t, "suspended", *u1.Status)
+
+		missesAfter := testutil.ToFloat64(dalCacheMissesCounter.WithLabelValues("user", "get_by_uid"))
+		assert.Greater(t, missesAfter, missesBefore, "Expected cache miss after bulk update flushed the cache")
+
+		// Verify control user was NOT updated
+		u3, _ := userDAL.GetByUid(ctx, controlUser.Uid)
+		assert.Equal(t, "active", *u3.Status)
+
+		// 5. Test UpdateAgeByIds
+		newAge := int8(99)
+		err = userDAL.UpdateAgeByIds(ctx, newAge, idsToUpdate)
+		assert.NoError(t, err)
+
+		u2, _ := userDAL.GetByID(ctx, idsToUpdate[1])
+		assert.Equal(t, int8(99), u2.Age)
+
+		// 6. Test Hard Limits
+		overLimitUids := make([]string, 5001)
+		err = userDAL.UpdateStatusByUids(ctx, &newStatus, overLimitUids)
+		assert.ErrorContains(t, err, "exceeds maximum limit of 5000 items")
+
+		// 7. Test Empty Slices
+		err = userDAL.UpdateAgeByIds(ctx, 30, []int64{})
+		assert.NoError(t, err)
+	})
+}

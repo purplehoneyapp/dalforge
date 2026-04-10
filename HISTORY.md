@@ -1,5 +1,8 @@
 # Version History
 
+## v1.5.0 - 2026-04-10
+  - added bulk gets and bulk update functionality
+
 ## v1.4.0 - 2026-04-06
   - removed Store methods as they can cause a lot of problems in distributed setup; for entities with multiple unique keys.
 

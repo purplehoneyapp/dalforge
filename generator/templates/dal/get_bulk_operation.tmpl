@@ -1,0 +1,149 @@
+{{define "get_bulk_operation"}}
+{{- $column := index .Root.Columns .ColumnName }}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+{{- $paramName := .ColumnName | pluralize | camelCase }}
+
+func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pluralize | pascalCase}}(ctx context.Context, {{bulkFuncParams .ColumnName .Root.Columns}}) ([]*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
+    if len({{$paramName}}) == 0 {
+        return nil, nil // Nothing to fetch
+    }
+    
+    // Hard limit to prevent massive memory allocations and driver crashes
+    if len({{$paramName}}) > 5000 {
+        return nil, fmt.Errorf("bulk get operation exceeds maximum limit of 5000 items")
+    }
+
+    const operation = "get_bulk_by_{{.ColumnName | snakeCase}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    var results []*{{$entityStructName}}
+    var missingKeys []interface{}
+
+    // 1. Check local in-memory cache for each key
+    for _, key := range {{$paramName}} {
+        {{- if eq .ColumnName "id" }}
+        entity, _ := d.getByIDCached(key)
+        if entity != nil {
+            results = append(results, entity)
+        } else {
+            missingKeys = append(missingKeys, key)
+        }
+        {{- else }}
+        cacheKey := fmt.Sprintf("{{$entityTableName}}_{{.ColumnName | snakeCase}}:%v", key)
+        val, found := d.cache.Get(cacheKey)
+        if found {
+            entityId, ok := val.(int64)
+            if ok {
+                entity, _ := d.getByIDCached(entityId)
+                if entity != nil {
+                    results = append(results, entity)
+                    continue
+                }
+            }
+        }
+        missingKeys = append(missingKeys, key)
+        {{- end }}
+    }
+
+    if len(missingKeys) == 0 {
+        d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)
+        return results, nil
+    }
+
+    d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)
+
+    // 2. Fetch cache misses from DB via Circuit Breaker in safe chunks
+    var dbEntities []*{{$entityStructName}}
+    batchSize := 500
+    
+    for i := 0; i < len(missingKeys); i += batchSize {
+        end := i + batchSize
+        if end > len(missingKeys) {
+            end = len(missingKeys)
+        }
+        chunk := missingKeys[i:end]
+
+        dbResult, err := d.dbBreaker.Execute(func() (interface{}, error) {
+            return d.getBy{{.ColumnName | pluralize | pascalCase}}(ctx, chunk)
+        })
+
+        if err != nil {
+            return nil, err // Fail fast if a chunk fails
+        }
+        
+        dbEntities = append(dbEntities, dbResult.([]*{{$entityStructName}})...)
+    }
+
+    results = append(results, dbEntities...)
+
+    // 3. Cache the newly fetched items for future zero-latency access
+    for _, entity := range dbEntities {
+        d.setCached(entity)
+        {{- if ne .ColumnName "id" }}
+        cacheMappingKey := fmt.Sprintf("{{$entityTableName}}_{{.ColumnName | snakeCase}}:%v", entity.{{.ColumnName | pascalCase}})
+        d.cache.Set(cacheMappingKey, entity.ID, time.Second*{{.Root.Caching.SingleExpirationSeconds}})
+        {{- end }}
+    }
+
+    return results, nil
+}
+
+func (d *{{$entityArgumentName}}Repository) getBy{{.ColumnName | pluralize | pascalCase}}(ctx context.Context, missingKeys []interface{}) ([]*{{$entityStructName}}, error) {
+    const operation = "get_bulk_by_{{.ColumnName | snakeCase}}"
+    dbStart := time.Now()
+
+    // Dynamically build ?,?,? placeholders for the IN clause
+    placeholders := make([]string, len(missingKeys))
+    for i := range missingKeys {
+        placeholders[i] = "?"
+    }
+
+    query := fmt.Sprintf(`
+        SELECT {{querySelect .Root.Columns .Root.Operations.SoftDelete}}
+        FROM {{$entityTableName}}s
+        WHERE {{.ColumnName | snakeCase}} IN (%s) {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
+    `, strings.Join(placeholders, ","))
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, dbErr
+    }
+
+    rows, err := db.QueryContext(ctx, query, missingKeys...)
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, fmt.Errorf("failed to bulk query {{$entityTableName}}s: %w", err)
+    }
+    defer rows.Close()
+
+    var entities []*{{$entityStructName}}
+    for rows.Next() {
+        var entity {{$entityStructName}}
+        err := rows.Scan(
+            &entity.ID,
+            &entity.Version,
+            {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
+            {{end}}{{end}}&entity.Created,
+            &entity.Updated,
+            {{if .Root.Operations.SoftDelete}}&entity.DeletedAt,{{end}}
+        )
+        if err != nil {
+            d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+            return nil, fmt.Errorf("failed to scan {{$entityStructName}}: %w", err)
+        }
+        entities = append(entities, &entity)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+
+    return entities, nil
+}
+{{end}}

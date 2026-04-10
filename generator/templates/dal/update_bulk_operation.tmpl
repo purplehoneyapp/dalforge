@@ -1,0 +1,113 @@
+{{define "update_bulk_operation"}}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+{{- $upd := .UpdateConfig }}
+{{- $funcName := pascalCase $upd.Name }}
+{{- $inParamName := $upd.WhereIn | pluralize | camelCase }}
+
+func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {{bulkUpdateFuncParams $upd .Root.Columns}}) error {
+    if d.configProvider.BlockedWrites("{{$entityTableName}}") {
+        return ErrOperationBlocked
+    }
+
+    if len({{$inParamName}}) == 0 {
+        return nil // Nothing to update
+    }
+    
+    // Hard limit to prevent massive memory allocations and driver crashes
+    if len({{$inParamName}}) > 5000 {
+        return fmt.Errorf("bulk update operation exceeds maximum limit of 5000 items")
+    }
+
+    const operation = "update_bulk_{{$upd.Name | snakeCase}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    var totalRowsAffected int64
+    batchSize := 500
+    
+    for i := 0; i < len({{$inParamName}}); i += batchSize {
+        end := i + batchSize
+        if end > len({{$inParamName}}) {
+            end = len({{$inParamName}})
+        }
+        chunk := {{$inParamName}}[i:end]
+        
+        result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+            // Pass the SET columns, then the chunk
+            return d.{{camelCase $upd.Name}}(ctx, {{range $setCol := $upd.Set}}{{camelCase $setCol}}, {{end}}chunk)
+        })
+
+        if err != nil {
+            return err // Fail fast if a chunk fails
+        }
+        totalRowsAffected += result.(int64)
+    }
+
+    if totalRowsAffected > 0 {
+        // Since many rows changed at once, we perform a global flush to ensure local 
+        // node safety and trigger pub/sub notifications for peer nodes.
+        d.FlushAllCache()
+    }
+
+    return nil
+}
+
+func (d *{{$entityArgumentName}}Repository) {{camelCase $upd.Name}}(ctx context.Context, {{bulkUpdateFuncParams $upd .Root.Columns}}) (int64, error) {
+    const operation = "update_bulk_{{$upd.Name | snakeCase}}"
+    dbStart := time.Now()
+    now := time.Now()
+
+    // 1. Dynamically build ?,?,? placeholders for the IN clause
+    placeholders := make([]string, len({{$inParamName}}))
+    for i := range {{$inParamName}} {
+        placeholders[i] = "?"
+    }
+
+    query := fmt.Sprintf(`
+        UPDATE {{$entityTableName}}s
+        SET
+            {{- range $setCol := $upd.Set}}
+            {{$setCol | snakeCase}} = ?,
+            {{- end}}
+            updated = ?,
+            version = version + 1
+        WHERE {{$upd.WhereIn | snakeCase}} IN (%s) {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
+    `, strings.Join(placeholders, ","))
+
+    // 2. Build the flat arguments array (SET arguments first, then WHERE IN arguments)
+    args := make([]interface{}, 0, {{len $upd.Set}} + 1 + len({{$inParamName}}))
+    
+    {{- range $setCol := $upd.Set}}
+    args = append(args, {{camelCase $setCol}})
+    {{- end}}
+    args = append(args, now) // the 'updated' timestamp
+
+    for _, val := range {{$inParamName}} {
+        args = append(args, val)
+    }
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", true)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, dbErr
+    }
+
+    res, err := db.ExecContext(ctx, query, args...)
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to execute %s: %w", operation, err)
+    }
+
+    rowsAffected, err := res.RowsAffected()
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return 0, fmt.Errorf("failed to get rows affected: %w", err)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+
+    return rowsAffected, nil
+}
+{{end}}

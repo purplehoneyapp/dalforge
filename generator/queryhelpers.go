@@ -477,3 +477,74 @@ func deleteQueryParams(del DeleteConfig) string {
 
 	return strings.TrimSuffix(result, ", ")
 }
+
+// pluralize is a simple helper to make parameter names plural for slices.
+// e.g., "uid" -> "uids", "id" -> "ids", "status" -> "statuses"
+func pluralize(s string) string {
+	if strings.HasSuffix(s, "s") {
+		return s + "es"
+	}
+	return s + "s"
+}
+
+// bulkFuncParams generates the parameter signature for a bulk get operation.
+// Example Output: "uids []string" or "ids []int64"
+func bulkFuncParams(colName string, columns map[string]Column) (string, error) {
+	var goType string
+
+	if colName == "id" {
+		goType = "int64"
+	} else if col, ok := columns[colName]; ok {
+		// We force allowNull to false here because IN clauses typically use non-pointer slices
+		goType = strings.TrimPrefix(toGoType(col.Type, false), "*")
+	} else {
+		return "", fmt.Errorf("column %s not found for bulk operation", colName)
+	}
+
+	paramName := CamelCaser(pluralize(colName))
+	return fmt.Sprintf("%s []%s", paramName, goType), nil
+}
+
+// bulkUpdateFuncParams generates the typed arguments for a bulk update function.
+// Example Output: "status string, points int32, uids []string"
+func bulkUpdateFuncParams(upd UpdateBulkConfig, columns map[string]Column) (string, error) {
+	result := ""
+
+	// 1. Add the SET parameters
+	for _, setCol := range upd.Set {
+		col, ok := columns[setCol]
+		if !ok {
+			return "", fmt.Errorf("column %s not found for bulk update", setCol)
+		}
+		goType := toGoType(col.Type, col.AllowNull)
+		result += fmt.Sprintf("%s %s, ", CamelCaser(setCol), goType)
+	}
+
+	// 2. Add the IN clause slice parameter
+	var whereType string
+	if upd.WhereIn == "id" {
+		whereType = "int64"
+	} else if col, ok := columns[upd.WhereIn]; ok {
+		whereType = strings.TrimPrefix(toGoType(col.Type, false), "*")
+	} else {
+		return "", fmt.Errorf("column %s not found for bulk update whereIn", upd.WhereIn)
+	}
+
+	whereParam := CamelCaser(pluralize(upd.WhereIn))
+	result += fmt.Sprintf("%s []%s", whereParam, whereType)
+
+	return result, nil
+}
+
+// bulkUpdateCallParams generates the comma-separated variable names for calling the inner DB function.
+// Example Output: "status, points, uids"
+func bulkUpdateCallParams(upd UpdateBulkConfig) string {
+	result := ""
+	for _, setCol := range upd.Set {
+		result += fmt.Sprintf("%s, ", CamelCaser(setCol))
+	}
+	whereParam := CamelCaser(pluralize(upd.WhereIn))
+	result += whereParam
+
+	return result
+}

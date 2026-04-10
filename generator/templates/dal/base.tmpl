@@ -79,6 +79,20 @@ type {{$entityStructName}}Repository interface {
     {{- end }}
 {{- end }}
 
+{{- /* Bulk Gets Interface */ -}}
+{{- if and .Operations .Operations.GetsBulk }}
+    {{- range .Operations.GetsBulk }}
+    GetBy{{. | pluralize | pascalCase}}(ctx context.Context, {{bulkFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
+    {{- end }}
+{{- end }}
+
+{{- /* Bulk Updates Interface */ -}}
+{{- if and .Operations .Operations.UpdatesBulk }}
+    {{- range .Operations.UpdatesBulk }}
+    {{pascalCase .Name}}(ctx context.Context, {{bulkUpdateFuncParams . $.Columns}}) error
+    {{- end }}
+{{- end }}
+
 {{- if and .Operations .Operations.Lists }}
     {{- range .Operations.Lists }}
     {{pascalCase .Name}}(ctx context.Context, {{listFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
@@ -214,6 +228,18 @@ func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
 {{- if and .Operations .Operations.Lists }}
     {{- range .Operations.Lists }}
 {{template "count_operation" (dict "Root" $ "List" .)}}
+    {{- end }}
+{{- end }}
+
+{{- if and .Operations .Operations.GetsBulk }}
+    {{- range .Operations.GetsBulk }}
+{{template "get_bulk_operation" (dict "Root" $ "ColumnName" .)}}
+    {{- end }}
+{{- end }}
+
+{{- if and .Operations .Operations.UpdatesBulk }}
+    {{- range .Operations.UpdatesBulk }}
+{{template "update_bulk_operation" (dict "Root" $ "UpdateConfig" .)}}
     {{- end }}
 {{- end }}
 
