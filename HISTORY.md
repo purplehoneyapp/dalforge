@@ -1,5 +1,8 @@
 # Version History
 
+## v1.5.1 - 2026-04-11
+  - performance fix: bulk delete has limit of 5000 items. to delete everything needs to use for loop in calls.
+
 ## v1.5.0 - 2026-04-10
   - added bulk gets and bulk update functionality
 

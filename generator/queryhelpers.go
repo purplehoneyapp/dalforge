@@ -411,6 +411,9 @@ func deleteQuery(entityName string, del DeleteConfig, columns map[string]Column,
 		} else {
 			result += " WHERE deleted_at IS NULL"
 		}
+
+		// Note: We removed the hardcoded limit here.
+		// It is now dynamically appended in the delete_custom.tmpl file.
 		return result
 	}
 
@@ -420,14 +423,15 @@ func deleteQuery(entityName string, del DeleteConfig, columns map[string]Column,
 		result += fmt.Sprintf(" WHERE %s", where)
 	}
 
+	// Note: We removed the hardcoded limit here.
+	// It is now dynamically appended in the delete_custom.tmpl file.
 	return result
 }
 
 // deleteFuncParams generates the typed arguments for the Go function signature.
-// Example Output: cutoff time.Time, status bool
 func deleteFuncParams(del DeleteConfig, columns map[string]Column) (string, error) {
 	result := ""
-	params := extractUniqueParams(del.Where) // Deduplicated parameters!
+	params := extractUniqueParams(del.Where)
 
 	for _, param := range params {
 		colName := param
@@ -436,8 +440,6 @@ func deleteFuncParams(del DeleteConfig, columns map[string]Column) (string, erro
 		}
 
 		var goType string
-
-		// Handle built-in default columns that aren't explicitly in the columns map
 		if colName == "id" {
 			goType = "int64"
 		} else if colName == "created" || colName == "updated" {
@@ -445,17 +447,17 @@ func deleteFuncParams(del DeleteConfig, columns map[string]Column) (string, erro
 		} else if col, ok := columns[colName]; ok {
 			goType = toGoType(col.Type, col.AllowNull)
 		} else {
-			return "", fmt.Errorf("dal yaml definition error: missing column %s, which is used in where under delete %s", colName, del.Name)
+			return "", fmt.Errorf("dal yaml definition error: missing column %s", colName)
 		}
 
 		result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
 	}
 
-	return strings.TrimSuffix(result, ", "), nil
+	// Always append the limit parameter
+	return result + "limit int", nil
 }
 
 // deleteFuncCallParams generates the comma-separated variables passed as function call
-// Example Output: cutoff, status
 func deleteFuncCallParams(del DeleteConfig) string {
 	result := ""
 	params := extractUniqueParams(del.Where)
@@ -463,7 +465,8 @@ func deleteFuncCallParams(del DeleteConfig) string {
 		result += fmt.Sprintf("%s, ", CamelCaser(param))
 	}
 
-	return strings.TrimSuffix(result, ", ")
+	// Always append the limit parameter
+	return result + "limit"
 }
 
 // deleteQueryParams generates the comma-separated variables passed to db.ExecContext.

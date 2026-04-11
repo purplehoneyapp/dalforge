@@ -807,7 +807,7 @@ func TestCustomBulkDeletes(t *testing.T) {
 
 		// 2. Test Soft Bulk Delete (DeleteOlder where age > 28)
 		// Expected to affect ages 30, 35, 40 (3 rows)
-		rowsAffected, err := userDAL.DeleteOlder(ctx, 28)
+		rowsAffected, err := userDAL.DeleteOlder(ctx, 28, 5000)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), rowsAffected)
 
@@ -832,14 +832,14 @@ func TestCustomBulkDeletes(t *testing.T) {
 
 		// 3. Test Zero-Row Optimization
 		// Running the same delete again should yield 0 affected rows because of the `deleted_at IS NULL` scope
-		rowsAffected, err = userDAL.DeleteOlder(ctx, 28)
+		rowsAffected, err = userDAL.DeleteOlder(ctx, 28, 5000)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(0), rowsAffected, "Already deleted records should be ignored")
 
 		// 4. Test Hard Bulk Delete (HardDeleteOlder where age > 22)
 		// Expected to affect age 25 (active) AND ages 30, 35, 40 (soft-deleted).
 		// Hard deletes bypass the `deleted_at IS NULL` check.
-		rowsAffected, err = userDAL.HardDeleteOlder(ctx, 22)
+		rowsAffected, err = userDAL.HardDeleteOlder(ctx, 22, 5000)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(4), rowsAffected)
 

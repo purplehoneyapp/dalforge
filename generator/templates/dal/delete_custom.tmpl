@@ -13,9 +13,33 @@
 {{$queryParams := deleteQueryParams .}}
 
 // {{$delNamePascal}} executes a custom bulk delete operation.
+// 
+// PERFORMANCE NOTE: To prevent database locks, undo-log bloat, and replication lag, 
+// this operation requires a limit parameter. If the provided limit is <= 0 or > 5000, 
+// it will be automatically clamped to 5000.
+// 
+// Example usage for bulk deletion:
+//
+//	batchSize := 5000
+//	for {
+//		rowsAffected, err := repo.{{$delNamePascal}}(ctx{{if $queryParams}}, /* args */{{end}}, batchSize)
+//		if err != nil {
+//			// handle error appropriately
+//			break
+//		}
+//		if rowsAffected == 0 {
+//			break // All matching rows have been processed
+//		}
+//		time.Sleep(100 * time.Millisecond) // Yield database resources between batches
+//	}
 func (d *{{$repoName}}) {{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return 0, ErrOperationBlocked
+    }
+
+    // Clamp the limit to a safe range
+    if limit <= 0 || limit > 5000 {
+        limit = 5000
     }
 
     const operation = "{{$delName}}"
@@ -31,7 +55,6 @@ func (d *{{$repoName}}) {{$delNamePascal}}(ctx context.Context{{if $funcParams}}
 
     rowsAffected := result.(int64)
     
-    // Only flush caches if the database state actually changed
     if rowsAffected > 0 {
         d.FlushAllCache() 
     }
@@ -43,7 +66,8 @@ func (d *{{$repoName}}) {{$delNameCamel}}(ctx context.Context{{if $funcParams}},
     const operation = "{{$delName}}"
     dbStart := time.Now()
 
-    query := `{{deleteQuery $entityTableName . $columns $softDelete false}}`
+    // Inject the sanitized limit directly into the SQL string
+    query := `{{deleteQuery $entityTableName . $columns $softDelete false}}` + fmt.Sprintf(" LIMIT %d", limit)
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName | camelCase}}", true)
     if dbErr != nil {
@@ -76,9 +100,33 @@ func (d *{{$repoName}}) {{$delNameCamel}}(ctx context.Context{{if $funcParams}},
 
 {{if $softDelete}}
 // Hard{{$delNamePascal}} executes a permanent custom bulk delete operation.
+// 
+// PERFORMANCE NOTE: To prevent database locks, undo-log bloat, and replication lag, 
+// this operation requires a limit parameter. If the provided limit is <= 0 or > 5000, 
+// it will be automatically clamped to 5000.
+// 
+// Example usage for bulk deletion:
+//
+//	batchSize := 5000
+//	for {
+//		rowsAffected, err := repo.Hard{{$delNamePascal}}(ctx{{if $queryParams}}, /* args */{{end}}, batchSize)
+//		if err != nil {
+//			// handle error appropriately
+//			break
+//		}
+//		if rowsAffected == 0 {
+//			break // All matching rows have been processed
+//		}
+//		time.Sleep(100 * time.Millisecond) // Yield database resources between batches
+//	}
 func (d *{{$repoName}}) Hard{{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return 0, ErrOperationBlocked
+    }
+
+    // Clamp the limit to a safe range
+    if limit <= 0 || limit > 5000 {
+        limit = 5000
     }
 
     const operation = "hard_{{$delName}}"
@@ -106,7 +154,8 @@ func (d *{{$repoName}}) hard{{$delNamePascal}}(ctx context.Context{{if $funcPara
     const operation = "hard_{{$delName}}"
     dbStart := time.Now()
 
-    query := `{{deleteQuery $entityTableName . $columns $softDelete true}}`
+    // Inject the sanitized limit directly into the SQL string
+    query := `{{deleteQuery $entityTableName . $columns $softDelete true}}` + fmt.Sprintf(" LIMIT %d", limit)
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityTableName | camelCase}}", true)
     if dbErr != nil {
