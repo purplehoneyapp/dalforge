@@ -201,8 +201,8 @@ func add(a, b int) int {
 	return a + b
 }
 
-// Gets all the column names from all lists config and output all indexes.
-func listSQLIndexes(tableName string, columns map[string]Column, lists []ListConfig) string {
+// Replace the existing listSQLIndexes function in generator/templatehelpers.go
+func listSQLIndexes(tableName string, columns map[string]Column, lists []ListConfig, listsBulk []ListBulkConfig) string {
 	// Create a set to keep track of columns that need an index.
 	indexedColumns := make(map[string]bool)
 	defaultColumns := map[string]bool{
@@ -210,12 +210,9 @@ func listSQLIndexes(tableName string, columns map[string]Column, lists []ListCon
 		"updated": true,
 	}
 
-	// Iterate over each list configuration.
+	// Iterate over each standard list configuration.
 	for _, list := range lists {
 		for colName := range columns {
-			// Check if the column name is found in the Where or Order clause.
-			// This uses a simple substring match. You might want to refine this
-			// with more precise parsing if needed.
 			if strings.Contains(list.Where, colName) || strings.Contains(list.Order, colName) {
 				indexedColumns[colName] = true
 			}
@@ -227,10 +224,16 @@ func listSQLIndexes(tableName string, columns map[string]Column, lists []ListCon
 		}
 	}
 
+	// Iterate over the new bulk list configurations.
+	for _, listBulk := range listsBulk {
+		if listBulk.WhereIn != "id" && listBulk.WhereIn != "" {
+			indexedColumns[listBulk.WhereIn] = true
+		}
+	}
+
 	// Build the CREATE INDEX statements.
 	var builder strings.Builder
 	for colName := range indexedColumns {
-		// Customize the table name as needed.
 		builder.WriteString(fmt.Sprintf("CREATE INDEX idx_%s ON %ss (%s);\n",
 			SnakeCaser(colName), SnakeCaser(tableName), SnakeCaser(colName)))
 	}

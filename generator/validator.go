@@ -135,6 +135,34 @@ func validateOperationConfig(ops OperationConfig, columns map[string]Column) []s
 	// Validate UpdatesBulk (NEW)
 	errs = append(errs, validateUpdatesBulk(ops.UpdatesBulk, columns)...)
 
+	// Validate ListsBulk (NEW)
+	errs = append(errs, validateListsBulk(ops.ListsBulk, columns)...)
+
+	return errs
+}
+
+// 2. Add the new validation function at the bottom of the file:
+func validateListsBulk(lists []ListBulkConfig, columns map[string]Column) []string {
+	var errs []string
+	for _, list := range lists {
+		// Validate Name
+		if len(list.Name) <= 4 {
+			errs = append(errs, fmt.Sprintf("listsBulk name '%s' must be longer than 4 characters", list.Name))
+		}
+		if strings.Contains(list.Name, " ") {
+			errs = append(errs, fmt.Sprintf("listsBulk name '%s' must not contain spaces", list.Name))
+		}
+		if !isSnakeCase(list.Name) {
+			errs = append(errs, fmt.Sprintf("listsBulk name '%s' must be in snake_case", list.Name))
+		}
+
+		// Validate WhereIn column exists
+		if list.WhereIn != "id" {
+			if _, exists := columns[list.WhereIn]; !exists {
+				errs = append(errs, fmt.Sprintf("listsBulk '%s' refers to unknown whereIn column '%s'", list.Name, list.WhereIn))
+			}
+		}
+	}
 	return errs
 }
 

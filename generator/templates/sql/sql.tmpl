@@ -18,7 +18,7 @@ CREATE UNIQUE INDEX idx_{{. | snakeCase}} ON {{$.Name | snakeCase}}s ({{. | snak
 {{- end}}
 
 # Indexes that serve all the list operations
-{{ listSQLIndexes .Name .Columns .Operations.Lists }}
+{{ listSQLIndexes .Name .Columns .Operations.Lists .Operations.ListsBulk }}
 
 {{if .Operations.SoftDelete}}
 CREATE INDEX idx_deleted_at ON users (deleted_at);

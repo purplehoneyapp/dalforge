@@ -93,6 +93,13 @@ type {{$entityStructName}}Repository interface {
     {{- end }}
 {{- end }}
 
+{{- /* Bulk Lists Interface */ -}}
+{{- if and .Operations .Operations.ListsBulk }}
+    {{- range .Operations.ListsBulk }}
+    {{pascalCase .Name}}(ctx context.Context, {{bulkFuncParams .WhereIn $.Columns}}) ([]*{{$entityStructName}}, error)
+    {{- end }}
+{{- end }}
+
 {{- if and .Operations .Operations.Lists }}
     {{- range .Operations.Lists }}
     {{pascalCase .Name}}(ctx context.Context, {{listFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
@@ -240,6 +247,12 @@ func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
 {{- if and .Operations .Operations.UpdatesBulk }}
     {{- range .Operations.UpdatesBulk }}
 {{template "update_bulk_operation" (dict "Root" $ "UpdateConfig" .)}}
+    {{- end }}
+{{- end }}
+
+{{- if and .Operations .Operations.ListsBulk }}
+    {{- range .Operations.ListsBulk }}
+{{template "list_bulk_operation" (dict "Root" $ "ListBulk" .)}}
     {{- end }}
 {{- end }}
 

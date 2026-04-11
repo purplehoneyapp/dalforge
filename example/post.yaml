@@ -11,6 +11,8 @@ columns:
     type: datetime
   revoked: 
     type: bool
+  language_id:
+    type: varchar
 operations:
   write: true
   delete: true
@@ -21,6 +23,9 @@ operations:
       where: deleted = 0 and target_age = :target_age # use :col_name to make it an argument of a function
       order: created
       descending: true
+  listsBulk:
+    - name: list_by_languages
+      whereIn: language_id
   deletes:
     - name: delete_expired
       where: "expires_at < :cutoff OR (revoked = true AND updated < :cutoff)"

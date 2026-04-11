@@ -1,0 +1,121 @@
+{{define "list_bulk_operation"}}
+{{- $entityStructName := pascalCase .Root.Name }}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+{{- $listBulk := .ListBulk }}
+{{- $funcName := pascalCase $listBulk.Name }}
+{{- $inParamName := $listBulk.WhereIn | pluralize | camelCase }}
+
+func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {{bulkFuncParams $listBulk.WhereIn .Root.Columns}}) ([]*{{$entityStructName}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
+    if len({{$inParamName}}) == 0 {
+        return nil, nil // Nothing to fetch
+    }
+    
+    // Hard limit to prevent massive memory allocations and driver crashes
+    if len({{$inParamName}}) > 5000 {
+        return nil, fmt.Errorf("bulk list operation exceeds maximum limit of 5000 items")
+    }
+
+    const operation = "list_bulk_{{$listBulk.Name | snakeCase}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    var results []*{{$entityStructName}}
+    
+    // Fallback to DB via Circuit Breaker in safe chunks
+    batchSize := 500
+    
+    for i := 0; i < len({{$inParamName}}); i += batchSize {
+        end := i + batchSize
+        if end > len({{$inParamName}}) {
+            end = len({{$inParamName}})
+        }
+        chunk := {{$inParamName}}[i:end]
+
+        // Convert typed chunk to []interface{} for the variadic SQL args
+        args := make([]interface{}, len(chunk))
+        for j, v := range chunk {
+            args[j] = v
+        }
+
+        dbResult, err := d.dbBreaker.Execute(func() (interface{}, error) {
+            return d.{{camelCase $listBulk.Name}}(ctx, args)
+        })
+
+        if err != nil {
+            return nil, err // Fail fast if a chunk fails
+        }
+        
+        dbEntities := dbResult.([]*{{$entityStructName}})
+        results = append(results, dbEntities...)
+
+        // Cache the newly fetched items for future zero-latency single-item access
+        for _, entity := range dbEntities {
+            d.setCached(entity)
+        }
+    }
+
+    return results, nil
+}
+
+func (d *{{$entityArgumentName}}Repository) {{camelCase $listBulk.Name}}(ctx context.Context, missingKeys []interface{}) ([]*{{$entityStructName}}, error) {
+    const operation = "list_bulk_{{$listBulk.Name | snakeCase}}"
+    dbStart := time.Now()
+
+    // Dynamically build ?,?,? placeholders for the IN clause
+    placeholders := make([]string, len(missingKeys))
+    for i := range missingKeys {
+        placeholders[i] = "?"
+    }
+
+    query := fmt.Sprintf(`
+        SELECT {{querySelect .Root.Columns .Root.Operations.SoftDelete}}
+        FROM {{$entityTableName}}s
+        WHERE {{$listBulk.WhereIn | snakeCase}} IN (%s) {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
+    `, strings.Join(placeholders, ","))
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, dbErr
+    }
+
+    rows, err := db.QueryContext(ctx, query, missingKeys...)
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, fmt.Errorf("failed to bulk query {{$entityTableName}}s: %w", err)
+    }
+    defer rows.Close()
+
+    var entities []*{{$entityStructName}}
+    for rows.Next() {
+        var entity {{$entityStructName}}
+        err := rows.Scan(
+            &entity.ID,
+            &entity.Version,
+            {{range $colName, $col := .Root.Columns}}{{if ne $colName "id"}}&entity.{{$colName | pascalCase}},
+            {{end}}{{end}}&entity.Created,
+            &entity.Updated,
+            {{if .Root.Operations.SoftDelete}}&entity.DeletedAt,{{end}}
+        )
+        if err != nil {
+            d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+            return nil, fmt.Errorf("failed to scan {{$entityStructName}}: %w", err)
+        }
+        entities = append(entities, &entity)
+    }
+
+    if err = rows.Err(); err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, fmt.Errorf("rows error: %w", err)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+
+    return entities, nil
+}
+{{end}}

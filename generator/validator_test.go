@@ -42,6 +42,12 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 			},
 			Write:  true,
 			Delete: true,
+			ListsBulk: []ListBulkConfig{
+				{
+					Name:    "by_public_ids",
+					WhereIn: "public_id",
+				},
+			},
 		},
 		CircuitBreaker: CircuitBreakerConfig{
 			TimeoutSeconds:      30,
@@ -113,6 +119,16 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 			},
 			Write:  true,
 			Delete: true,
+			ListsBulk: []ListBulkConfig{
+				{
+					Name:    "bad list name", // error: spaces, not snake case
+					WhereIn: "ghost_column",  // error: column doesn't exist
+				},
+				{
+					Name:    "lst", // error: too short
+					WhereIn: "id",
+				},
+			},
 		},
 		CircuitBreaker: CircuitBreakerConfig{
 			TimeoutSeconds:      0,

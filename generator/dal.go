@@ -205,6 +205,7 @@ type OperationConfig struct {
 	Gets        []string           `yaml:"gets"`
 	GetsBulk    []string           `yaml:"getsBulk"` // <-- NEW: For batch gets via IN clause
 	Lists       []ListConfig       `yaml:"lists"`
+	ListsBulk   []ListBulkConfig   `yaml:"listsBulk"`
 	Deletes     []DeleteConfig     `yaml:"deletes"`
 	UpdatesBulk []UpdateBulkConfig `yaml:"updatesBulk"` // <-- NEW: For bulk partial updates
 	Write       bool               `yaml:"write"`
@@ -225,4 +226,10 @@ type ListConfig struct {
 	Order       string            `yaml:"order"`
 	Descending  bool              `yaml:"desc"`
 	TypeMapping map[string]string `yaml:"typeMapping"`
+}
+
+// Add this new struct definition to generator/dal.go
+type ListBulkConfig struct {
+	Name    string `yaml:"name"`
+	WhereIn string `yaml:"whereIn"`
 }
