@@ -1,8 +1,3 @@
-Here is a heavily improved, comprehensive README.md that reflects all the powerful features DALForge currently supports (including the new bulk operations, scatter-gather caching, soft deletes, and uid prefixes we've discussed).
-
-It is structured to be welcoming to open-source contributors while serving as a robust piece of documentation for new users.
-
-Markdown
 # DALForge 🛠️
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/purplehoneyapp/dalforge.svg)](https://pkg.go.dev/github.com/purplehoneyapp/dalforge)
