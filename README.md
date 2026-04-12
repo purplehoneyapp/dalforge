@@ -22,12 +22,15 @@ It eliminates database boilerplate by transforming YAML entity definitions into 
 
 Ensure you have [Go](https://golang.org/doc/install) installed (version 1.24+ recommended).
 
-```bash
+```
 go install [github.com/purplehoneyapp/dalforge@latest](https://github.com/purplehoneyapp/dalforge@latest)
-🛠️ Quick Start
+```
+
+## 🛠️ Quick Start
 1. Create a YAML definition file (config/user.yaml):
 
 YAML
+```
 name: user  # Entity name (singular, snake_case)
 version: v1
 columns:
@@ -80,19 +83,24 @@ caching:
   listExpirationSeconds: 60
   listInvalidation: flush
   maxItemsCount: 100000
+```
+
 2. Run DALForge:
 
-Bash
-dalforge generate ./config ./internal/dal
+`dalforge generate ./config ./internal/dal`
+
 3. Use your generated code:
 DALForge generates user.gen.go, user.sql, and interface files. You can immediately use the repository in your service layer:
 
-Go
+```
 repo := dal.NewUserRepository(dbProvider, redisCache, configProvider, cbSettings, telemetry)
 
 // Instant cache-backed fetch!
 user, err := repo.GetByEmail(ctx, "hello@example.com")
-📖 Configuration Guide
+```
+
+## 📖 Configuration Guide
+
 Supported Column Types
 DALForge maps YAML types to native Go and SQL types automatically:
 int8, int16, int32, int64, float, varchar, text, bool, date, time, datetime, uid, json.
@@ -121,16 +129,16 @@ DALForge strictly enforces safety. Bulk operations are hard-limited to 5000 item
 
 All generated operations report directly to a TelemetryProvider interface, allowing you to easily mock metrics in testing or bind them to Prometheus in production.
 
-🧪 Testing
+## 🧪 Testing
 DALForge guarantees the validity of generated code. The generated templates themselves are heavily tested within this repository against real MySQL and Redis testcontainers.
 
 Because the generator is tested, you do not need to write unit tests for the generated DAL code in your own projects. Simply mock the generated Interfaces in your service-layer tests.
 
 To run the internal test suite:
 
-Bash
-go test ./...
-🤝 Contributing
+`go test ./...`
+
+## 🤝 Contributing
 We welcome contributions! Whether it's a bug report, a new feature, or documentation improvements:
 
 Fork the repository.
@@ -145,5 +153,5 @@ Open a Pull Request.
 
 Please ensure your code passes existing tests and includes new tests for added features.
 
-📄 License
+## 📄 License
 DALForge is open-source software released under the MIT License.
