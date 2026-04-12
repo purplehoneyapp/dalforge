@@ -6,7 +6,21 @@
 {{- $funcName := pascalCase $listBulk.Name }}
 {{- $inParamName := $listBulk.WhereIn | pluralize | camelCase }}
 
-func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {{bulkFuncParams $listBulk.WhereIn .Root.Columns}}) ([]*{{$entityStructName}}, error) {
+// {{$funcName}} executes a bulk list operation using an IN clause on the {{$listBulk.WhereIn}} column.
+{{- if $listBulk.Where}}
+// It also applies the following custom filter: {{$listBulk.Where}}
+{{- end}}
+//
+// PERFORMANCE & CACHING NOTE:
+// To prevent massive memory allocations and database driver crashes, this operation 
+// is hard-limited to 5000 items and executes database queries in safe batches of 500.
+// 
+// Unlike standard list operations, this function does NOT use the listCache because 
+// the permutations of dynamic input slices are practically infinite. Instead, it queries the 
+// database directly but aggressively warms the local single-item cache with the 
+// results. Subsequent fetches for any individual {{$entityStructName}} returned by this query 
+// will be instant zero-latency cache hits.
+func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {{listBulkFuncParams $listBulk .Root.Columns}}) ([]*{{$entityStructName}}, error) {
     if d.configProvider.BlockedReads("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
     }
@@ -15,7 +29,6 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {
         return nil, nil // Nothing to fetch
     }
     
-    // Hard limit to prevent massive memory allocations and driver crashes
     if len({{$inParamName}}) > 5000 {
         return nil, fmt.Errorf("bulk list operation exceeds maximum limit of 5000 items")
     }
@@ -25,7 +38,6 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {
 
     var results []*{{$entityStructName}}
     
-    // Fallback to DB via Circuit Breaker in safe chunks
     batchSize := 500
     
     for i := 0; i < len({{$inParamName}}); i += batchSize {
@@ -42,7 +54,7 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {
         }
 
         dbResult, err := d.dbBreaker.Execute(func() (interface{}, error) {
-            return d.{{camelCase $listBulk.Name}}(ctx, args)
+            return d.{{camelCase $listBulk.Name}}(ctx, {{listBulkInnerCallArgs $listBulk}})
         })
 
         if err != nil {
@@ -52,7 +64,7 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {
         dbEntities := dbResult.([]*{{$entityStructName}})
         results = append(results, dbEntities...)
 
-        // Cache the newly fetched items for future zero-latency single-item access
+        // Cache the newly fetched items
         for _, entity := range dbEntities {
             d.setCached(entity)
         }
@@ -61,20 +73,20 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {
     return results, nil
 }
 
-func (d *{{$entityArgumentName}}Repository) {{camelCase $listBulk.Name}}(ctx context.Context, missingKeys []interface{}) ([]*{{$entityStructName}}, error) {
+func (d *{{$entityArgumentName}}Repository) {{camelCase $listBulk.Name}}(ctx context.Context, {{listBulkInternalFuncParams $listBulk .Root.Columns}}) ([]*{{$entityStructName}}, error) {
     const operation = "list_bulk_{{$listBulk.Name | snakeCase}}"
     dbStart := time.Now()
 
     // Dynamically build ?,?,? placeholders for the IN clause
-    placeholders := make([]string, len(missingKeys))
-    for i := range missingKeys {
+    placeholders := make([]string, len(chunkArgs))
+    for i := range chunkArgs {
         placeholders[i] = "?"
     }
 
     query := fmt.Sprintf(`
         SELECT {{querySelect .Root.Columns .Root.Operations.SoftDelete}}
         FROM {{$entityTableName}}s
-        WHERE {{$listBulk.WhereIn | snakeCase}} IN (%s) {{if .Root.Operations.SoftDelete}}AND deleted_at IS NULL{{end}}
+        WHERE {{listBulkQueryWhere $listBulk .Root.Operations.SoftDelete}}
     `, strings.Join(placeholders, ","))
 
     db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false)
@@ -83,7 +95,17 @@ func (d *{{$entityArgumentName}}Repository) {{camelCase $listBulk.Name}}(ctx con
         return nil, dbErr
     }
 
-    rows, err := db.QueryContext(ctx, query, missingKeys...)
+    // Build the final arguments slice (Scalars first, then chunked IN values)
+    var queryArgs []interface{}
+    {{- if $listBulk.Where}}
+    {{- $params := extractParams $listBulk.Where }}
+    {{- range $param := $params }}
+    queryArgs = append(queryArgs, {{camelCase $param}})
+    {{- end}}
+    {{- end}}
+    queryArgs = append(queryArgs, chunkArgs...)
+
+    rows, err := db.QueryContext(ctx, query, queryArgs...)
     if err != nil {
         d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
         return nil, fmt.Errorf("failed to bulk query {{$entityTableName}}s: %w", err)

@@ -13,6 +13,10 @@ columns:
     type: bool
   language_id:
     type: varchar
+  user_id: 
+    type: varchar
+  story_uid:
+    type: varchar
 operations:
   write: true
   delete: true
@@ -26,6 +30,11 @@ operations:
   listsBulk:
     - name: list_by_languages
       whereIn: language_id
+    - name: list_by_user_and_stories
+      where: user_id = :user
+      whereIn: story_uid
+      typeMapping:
+        user: user_id
   deletes:
     - name: delete_expired
       where: "expires_at < :cutoff OR (revoked = true AND updated < :cutoff)"

@@ -96,7 +96,7 @@ type {{$entityStructName}}Repository interface {
 {{- /* Bulk Lists Interface */ -}}
 {{- if and .Operations .Operations.ListsBulk }}
     {{- range .Operations.ListsBulk }}
-    {{pascalCase .Name}}(ctx context.Context, {{bulkFuncParams .WhereIn $.Columns}}) ([]*{{$entityStructName}}, error)
+    {{pascalCase .Name}}(ctx context.Context, {{listBulkFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
     {{- end }}
 {{- end }}
 

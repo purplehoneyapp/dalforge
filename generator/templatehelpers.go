@@ -229,6 +229,15 @@ func listSQLIndexes(tableName string, columns map[string]Column, lists []ListCon
 		if listBulk.WhereIn != "id" && listBulk.WhereIn != "" {
 			indexedColumns[listBulk.WhereIn] = true
 		}
+
+		// 2. NEW: Parse and index columns used in the Where clause
+		if listBulk.Where != "" {
+			for colName := range columns {
+				if strings.Contains(listBulk.Where, colName) {
+					indexedColumns[colName] = true
+				}
+			}
+		}
 	}
 
 	// Build the CREATE INDEX statements.

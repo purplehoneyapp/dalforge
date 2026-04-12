@@ -144,6 +144,10 @@ func validateOperationConfig(ops OperationConfig, columns map[string]Column) []s
 // 2. Add the new validation function at the bottom of the file:
 func validateListsBulk(lists []ListBulkConfig, columns map[string]Column) []string {
 	var errs []string
+
+	// Define the allowed default columns for this scope
+	allowedDefaults := map[string]bool{"created": true, "id": true, "updated": true}
+
 	for _, list := range lists {
 		// Validate Name
 		if len(list.Name) <= 4 {
@@ -160,6 +164,13 @@ func validateListsBulk(lists []ListBulkConfig, columns map[string]Column) []stri
 		if list.WhereIn != "id" {
 			if _, exists := columns[list.WhereIn]; !exists {
 				errs = append(errs, fmt.Sprintf("listsBulk '%s' refers to unknown whereIn column '%s'", list.Name, list.WhereIn))
+			}
+		}
+
+		// NEW: Validate TypeMapping targets exist for standard 'Where' clause
+		for paramName, mappedCol := range list.TypeMapping {
+			if _, exists := columns[mappedCol]; !exists && !allowedDefaults[mappedCol] {
+				errs = append(errs, fmt.Sprintf("typeMapping column '%s' for param '%s' in listsBulk '%s' is not defined", mappedCol, paramName, list.Name))
 			}
 		}
 	}

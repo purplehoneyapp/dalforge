@@ -62,6 +62,11 @@ func NewGenerator() (*Generator, error) {
 		"bulkFuncParams":               bulkFuncParams,
 		"bulkUpdateFuncParams":         bulkUpdateFuncParams,
 		"bulkUpdateCallParams":         bulkUpdateCallParams,
+		"listBulkFuncParams":           listBulkFuncParams,
+		"listBulkInternalFuncParams":   listBulkInternalFuncParams,
+		"listBulkInnerCallArgs":        listBulkInnerCallArgs,
+		"listBulkQueryWhere":           listBulkQueryWhere,
+		"extractParams":                extractParams,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")
@@ -230,6 +235,8 @@ type ListConfig struct {
 
 // Add this new struct definition to generator/dal.go
 type ListBulkConfig struct {
-	Name    string `yaml:"name"`
-	WhereIn string `yaml:"whereIn"`
+	Name        string            `yaml:"name"`
+	Where       string            `yaml:"where"`
+	WhereIn     string            `yaml:"whereIn"`
+	TypeMapping map[string]string `yaml:"typeMapping"`
 }

@@ -551,3 +551,106 @@ func bulkUpdateCallParams(upd UpdateBulkConfig) string {
 
 	return result
 }
+
+// listBulkFuncParams generates the public function signature parameters.
+// Example: "user int64, storyUids []string"
+func listBulkFuncParams(list ListBulkConfig, columns map[string]Column) (string, error) {
+	result := ""
+
+	// 1. Process regular 'Where' parameters
+	if list.Where != "" {
+		params := extractUniqueParams(list.Where)
+		for _, param := range params {
+			colName := param
+			if mappedCol, ok := list.TypeMapping[param]; ok {
+				colName = mappedCol
+			}
+
+			var goType string
+			if colName == "id" {
+				goType = "int64"
+			} else if colName == "created" || colName == "updated" {
+				goType = "time.Time"
+			} else if col, ok := columns[colName]; ok {
+				goType = toGoType(col.Type, col.AllowNull)
+			} else {
+				return "", fmt.Errorf("dal yaml definition error. missing column %s used in listsBulk %s", colName, list.Name)
+			}
+
+			result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
+		}
+	}
+
+	// 2. Process 'WhereIn' parameter (slice)
+	var inGoType string
+	if list.WhereIn == "id" {
+		inGoType = "int64"
+	} else if col, ok := columns[list.WhereIn]; ok {
+		inGoType = strings.TrimPrefix(toGoType(col.Type, false), "*")
+	} else {
+		return "", fmt.Errorf("column %s not found for listsBulk whereIn", list.WhereIn)
+	}
+
+	inParamName := CamelCaser(pluralize(list.WhereIn))
+	result += fmt.Sprintf("%s []%s", inParamName, inGoType)
+
+	return result, nil
+}
+
+// listBulkInternalFuncParams generates the private function signature parameters.
+// Example: "user int64, chunkArgs []interface{}"
+func listBulkInternalFuncParams(list ListBulkConfig, columns map[string]Column) (string, error) {
+	result := ""
+	if list.Where != "" {
+		params := extractUniqueParams(list.Where)
+		for _, param := range params {
+			colName := param
+			if mappedCol, ok := list.TypeMapping[param]; ok {
+				colName = mappedCol
+			}
+
+			var goType string
+			if colName == "id" {
+				goType = "int64"
+			} else if colName == "created" || colName == "updated" {
+				goType = "time.Time"
+			} else if col, ok := columns[colName]; ok {
+				goType = toGoType(col.Type, col.AllowNull)
+			}
+			result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
+		}
+	}
+	result += "chunkArgs []interface{}"
+	return result, nil
+}
+
+// listBulkInnerCallArgs generates the variables to pass to the inner DB function.
+// Example: "user, chunk"
+func listBulkInnerCallArgs(list ListBulkConfig) string {
+	result := ""
+	if list.Where != "" {
+		params := extractUniqueParams(list.Where)
+		for _, param := range params {
+			result += fmt.Sprintf("%s, ", CamelCaser(param))
+		}
+	}
+	// BUG FIX: We must pass the converted `args` slice, NOT the strongly-typed `chunk` slice.
+	result += "args"
+	return result
+}
+
+// listBulkQueryWhere constructs the raw SQL WHERE clause.
+// Example: "(user = ?) AND story_uid IN (%s) AND deleted_at IS NULL"
+func listBulkQueryWhere(list ListBulkConfig, softDelete bool) string {
+	result := ""
+	if strings.TrimSpace(list.Where) != "" {
+		result += "(" + replaceParams(list.Where) + ") AND "
+	}
+
+	result += fmt.Sprintf("%s IN (%%s)", SnakeCaser(list.WhereIn))
+
+	if softDelete {
+		result += " AND deleted_at IS NULL"
+	}
+	return result
+}

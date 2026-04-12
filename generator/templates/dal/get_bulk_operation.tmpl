@@ -5,6 +5,16 @@
 {{- $entityArgumentName := camelCase .Root.Name }}
 {{- $paramName := .ColumnName | pluralize | camelCase }}
 
+// GetBy{{.ColumnName | pluralize | pascalCase}} executes a bulk get operation.
+//
+// PERFORMANCE & CACHING NOTE:
+// This function is highly optimized for caching. It first checks the local in-memory 
+// cache for every individual key. Only the missing keys (cache misses) are fetched 
+// from the database in safe chunks of 500. The newly fetched items are then cached 
+// automatically.
+//
+// To prevent massive memory allocations and driver crashes, this operation is 
+// hard-limited to 5000 items per call.
 func (d *{{$entityArgumentName}}Repository) GetBy{{.ColumnName | pluralize | pascalCase}}(ctx context.Context, {{bulkFuncParams .ColumnName .Root.Columns}}) ([]*{{$entityStructName}}, error) {
     if d.configProvider.BlockedReads("{{$entityTableName}}") {
         return nil, ErrOperationBlocked
