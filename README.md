@@ -1,144 +1,154 @@
-# DALForge
+Here is a heavily improved, comprehensive README.md that reflects all the powerful features DALForge currently supports (including the new bulk operations, scatter-gather caching, soft deletes, and uid prefixes we've discussed).
 
-DALForge is a CLI tool that generates a complete Data Access Layer (DAL) from YAML configuration files. It streamlines the process of building standardized, production-ready DAL code for your Go projects by transforming simple YAML definitions into robust, well-organized Go code.
+It is structured to be welcoming to open-source contributors while serving as a robust piece of documentation for new users.
 
-## Features
+Markdown
+# DALForge 🛠️
 
-- **Automatic Code Generation:**
-  Generate DAL code (CRUD operations, caching, telemetry, circuit breaker integration, etc.) directly from YAML definitions.
+[![Go Reference](https://pkg.go.dev/badge/github.com/purplehoneyapp/dalforge.svg)](https://pkg.go.dev/github.com/purplehoneyapp/dalforge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.24-00ADD8.svg)](https://golang.org/doc/devel/release.html)
 
-- **Customization:**
-  Define your entities, fields, and relationships in YAML, and let DALForge create the corresponding DAL layer.
+**DALForge** is a CLI tool that generates a highly optimized, production-ready Data Access Layer (DAL) in Go from simple YAML configuration files. 
 
-- **Built-In Best Practices:**
-  The generated code includes support for:
-  - Caching with both local in-memory (go-cache) and distributed invalidation via Redis pub/sub.
-  - Circuit breaker integration using [gobreaker](https://github.com/sony/gobreaker).
-  - Telemetry with Prometheus.
+It eliminates database boilerplate by transforming YAML entity definitions into robust, interface-driven Go code equipped with built-in telemetry, circuit breaking, and advanced multi-tier caching.
 
-- **Open Source:**
-  DALForge is fully open source. Contributions, issues, and feature requests are welcome!
+## ✨ Features
 
-## Installation
+- **Zero-Boilerplate CRUD:** Automatically generates `Create`, `CreateBulk`, `Update`, `Get`, `List`, and `Delete` operations based on your schema.
+- **Advanced Bulk Operations:** Native support for bulk gets (`IN` clauses), bulk partial updates, and bulk lists with mixed scalar and variadic parameters.
+- **Multi-Tier Caching:** Implements an L1 in-memory cache (`go-cache`) synchronized across instances via an L2 Redis Pub/Sub invalidation layer.
+- **Scatter-Gather Cache Pattern:** Bulk `Get` operations automatically check the local cache first and only query the database for cache misses, saving immense DB load.
+- **Resilience Built-In:** All database calls are wrapped in [gobreaker](https://github.com/sony/gobreaker) circuit breakers to prevent cascading failures.
+- **Observability:** Built-in Prometheus telemetry tracking latency, cache hit/miss ratios, circuit breaker states, and database errors.
+- **Soft Deletes & Unique Scrambling:** Native support for `deleted_at` scoping, complete with unique-key scrambling to prevent collisions upon re-registration.
 
-1. **Prerequisites:**
-   - [Go](https://golang.org/doc/install) (version 1.16 or later)
-   - Redis (if you plan to use Redis for distributed cache invalidation)
-   - YAML configuration files defining your entities
+## 🚀 Installation
 
-2. **Install via `go install`:**
+Ensure you have [Go](https://golang.org/doc/install) installed (version 1.24+ recommended).
 
-   ```sh
-   go install github.com/purplehoneyapp/dalforge@latest
+```bash
+go install [github.com/purplehoneyapp/dalforge@latest](https://github.com/purplehoneyapp/dalforge@latest)
+🛠️ Quick Start
+1. Create a YAML definition file (config/user.yaml):
 
-
-## Usage
-DALForge is a command-line tool that generates your DAL code based on YAML configuration files.
-
-## Command Syntax
-```sh
-dalforge generate <inputdir> <outputdir>
-```
-
-inputdir: Directory containing your YAML files.
-outputdir: Directory where the generated DAL code will be written.
-
-## Example
-Suppose you have a folder ./config with your YAML files and you want to generate the DAL code in the folder ./dal. Run:
-
-```sh
-dalforge generate ./dalconfig ./dal
-```
-
-YAML Configuration
-Each YAML file defines an entity and its fields. For example:
-
-```yaml
-name: user  # entity name, should be singular, snake cased.
+YAML
+name: user  # Entity name (singular, snake_case)
 version: v1
 columns:
-  status:
-    type: string # supported types are: int8, int32, int64, bool, string, float, date, time, datetime, uuid
-    allowNull: true
-  uuid:
-    type: uuid
+  uid:
+    type: uid
+    prefix: usr # Auto-generates IDs like: usr_3f8b9a2...
     unique: true
   email:
-    type: string
+    type: varchar
     allowNull: false
     unique: true
-  birthdate:
-    type: date
-    allowNull: true
   age:
     type: int8
+  meta:
+    type: json
+    allowNull: true
 operations:
-  store: true   # if true will generate proper write functions
-  delete: true  # if true it will generate delete functions
+  write: true
+  delete: true
+  softDelete: true
   gets:
-    - email   # put a column name here; it will generate GetByEmail function. The intention is that those columns are unique values.
-    - uuid
+    - email
+    - uid
+  getsBulk:
+    - uid
   lists:
-    - name: list_by_id                 # name of a function that will fetch multiple rows with pagination supported. This should be snake cased and have a name that sounds like multiple results are expected.
-    - name: list_by_bday
-      where: birthdate < :birthdate    # you can use named parameters. This will create a ListByBDay(ctx, birthdate time.Time, startId int64, pageSize int) function
-      order: birthdate
-      desc: true
     - name: list_by_age
-      where: age = :age
+      where: age >= :minAge
       order: created
-     # desc: true   # default is false
-    - name: list_by_status
+      descending: true
+      typeMapping:
+        minAge: age
+  listsBulk:
+    - name: list_by_status_and_uids
       where: status = :status
-      order: created
+      whereIn: uid
+      typeMapping:
+        status: status
+  updatesBulk:
+    - name: update_status_by_uids
+      set: 
+        - status
+      whereIn: uid
 circuitbreaker:
-  timeoutSeconds: 20             # how long to wait while in open state before trying to go to half open state.
-  consecutiveFailures: 4         # how many times to fail in an closed state before we swithc to open state
+  timeoutSeconds: 20
+  consecutiveFailures: 4
 caching:
-  type: redis # Potential values could be: none, redis. If none that no cache invalidation across multiple instances would happen. Most likely you would have redis here.
-  singleExpirationSeconds: 300  # timeout for local cache for single rows
-  listExpirationSeconds: 60     # timeout for local cache for multiple rows aka list functions
-  listInvalidation: flush       # potential values could be: expire, flush (default is flush); expire means list cache will only expire. flush means that on any change of data list cache will be flushed.
-  maxItemsCount: 100000         # max number of items in cache
-```
+  type: redis
+  singleExpirationSeconds: 300
+  listExpirationSeconds: 60
+  listInvalidation: flush
+  maxItemsCount: 100000
+2. Run DALForge:
 
-DALForge uses these definitions to generate Go files (e.g. user.gen.go) that implement a complete DAL layer with caching, telemetry, and error handling.
+Bash
+dalforge generate ./config ./internal/dal
+3. Use your generated code:
+DALForge generates user.gen.go, user.sql, and interface files. You can immediately use the repository in your service layer:
 
-## Configuration & Customization
-DALForge comes with sensible defaults. You can customize various aspects:
+Go
+repo := dal.NewUserRepository(dbProvider, redisCache, configProvider, cbSettings, telemetry)
 
-**Configuration for MYSQL:**
-To define MYSQL servers check this configuration file: [serverprovider.yaml](example/dal/serverprovider.yaml)
+// Instant cache-backed fetch!
+user, err := repo.GetByEmail(ctx, "hello@example.com")
+📖 Configuration Guide
+Supported Column Types
+DALForge maps YAML types to native Go and SQL types automatically:
+int8, int16, int32, int64, float, varchar, text, bool, date, time, datetime, uid, json.
 
-**Caching:**
-Generated code supports in-memory caching and optional Redis-based cache invalidation. Adjust connection settings in the generated files if needed.
+The operations Block
+Define exactly what queries your repository needs. Unused operations are not generated, keeping your binary small.
 
-**Circuit Breaker:**
-Uses gobreaker with default thresholds that you can tune in the generated code.
+write: Generates Create, CreateBulk, and Update.
 
-**Telemetry:**
-Metrics are collected via Prometheus.
+delete / softDelete: Generates Delete (and HardDelete). Soft deletes automatically scope all gets and lists with deleted_at IS NULL.
 
-## Testing
-DALForge is fully tested. To run tests, execute:
+gets: Generates single-item fetchers (e.g., GetByEmail). Fields must be marked unique: true.
 
-```sh
+getsBulk: Generates scatter-gather IN clause fetchers (e.g., GetByUids).
+
+lists: Generates paginated SELECT queries with custom where clauses.
+
+listsBulk: Generates IN clause lists. Supports mixing standard where scalars with a variadic whereIn parameter.
+
+updatesBulk: Generates highly optimized bulk partial updates (e.g., UPDATE users SET status = ? WHERE uid IN (...)).
+
+deletes: Generates custom bulk delete operations (e.g., DeleteExpired).
+
+Telemetry & Circuit Breaking
+DALForge strictly enforces safety. Bulk operations are hard-limited to 5000 items and automatically chunked into database queries of 500 parameters to prevent driver panics.
+
+All generated operations report directly to a TelemetryProvider interface, allowing you to easily mock metrics in testing or bind them to Prometheus in production.
+
+🧪 Testing
+DALForge guarantees the validity of generated code. The generated templates themselves are heavily tested within this repository against real MySQL and Redis testcontainers.
+
+Because the generator is tested, you do not need to write unit tests for the generated DAL code in your own projects. Simply mock the generated Interfaces in your service-layer tests.
+
+To run the internal test suite:
+
+Bash
 go test ./...
-```
+🤝 Contributing
+We welcome contributions! Whether it's a bug report, a new feature, or documentation improvements:
 
-Generated code is tested in this repository so there is no really need to add unit tests to the generated DAL layer code in your real repositories.
+Fork the repository.
 
-Note:
-Global Prometheus counters are shared across tests. Use the provided telemetry reset functions (unregisterTelemetry() and registerTelemetry()) in your test setup if you require isolated metric state.
+Create a new branch (git checkout -b feature/amazing-feature).
 
-## Examples
-Check examples directory for yaml example and generated code examples.
+Commit your changes (git commit -m 'Add amazing feature').
 
-## Contributing
-Contributions are welcome! Please fork the repository, commit your changes, and open a pull request. For major changes, open an issue first to discuss your ideas.
+Push to the branch (git push origin feature/amazing-feature).
 
-## License
-DALForge is released under the MIT License. See the LICENSE file for details.
+Open a Pull Request.
 
-## Contact
-For questions, issues, or feature requests, please open an issue on the GitHub repository.
+Please ensure your code passes existing tests and includes new tests for added features.
+
+📄 License
+DALForge is open-source software released under the MIT License.
