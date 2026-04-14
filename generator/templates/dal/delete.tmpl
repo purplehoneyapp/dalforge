@@ -3,8 +3,6 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-// Deletes entity by id,
-// returns ErrNotFound in case nothing is deleted.
 func (d *{{$entityArgumentName}}Repository) Delete(ctx context.Context, entity *{{$entityStructName}}) error {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return ErrOperationBlocked

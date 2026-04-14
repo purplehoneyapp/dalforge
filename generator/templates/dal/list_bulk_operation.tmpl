@@ -6,20 +6,6 @@
 {{- $funcName := pascalCase $listBulk.Name }}
 {{- $inParamName := $listBulk.WhereIn | pluralize | camelCase }}
 
-// {{$funcName}} executes a bulk list operation using an IN clause on the {{$listBulk.WhereIn}} column.
-{{- if $listBulk.Where}}
-// It also applies the following custom filter: {{$listBulk.Where}}
-{{- end}}
-//
-// PERFORMANCE & CACHING NOTE:
-// To prevent massive memory allocations and database driver crashes, this operation 
-// is hard-limited to 5000 items and executes database queries in safe batches of 500.
-// 
-// Unlike standard list operations, this function does NOT use the listCache because 
-// the permutations of dynamic input slices are practically infinite. Instead, it queries the 
-// database directly but aggressively warms the local single-item cache with the 
-// results. Subsequent fetches for any individual {{$entityStructName}} returned by this query 
-// will be instant zero-latency cache hits.
 func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context, {{listBulkFuncParams $listBulk .Root.Columns}}) ([]*{{$entityStructName}}, error) {
     if d.configProvider.BlockedReads("{{$entityTableName}}") {
         return nil, ErrOperationBlocked

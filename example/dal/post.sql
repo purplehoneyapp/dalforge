@@ -17,11 +17,11 @@ CREATE TABLE posts (
 # Unique indexes as they serve Get operations returning single entity
 
 # Indexes that serve all the list operations
-CREATE INDEX idx_story_uid ON posts (story_uid);
-CREATE INDEX idx_user_id ON posts (user_id);
-CREATE INDEX idx_target_age ON posts (target_age);
 CREATE INDEX idx_deleted ON posts (deleted);
+CREATE INDEX idx_target_age ON posts (target_age);
 CREATE INDEX idx_created ON posts (created);
 CREATE INDEX idx_language_id ON posts (language_id);
+CREATE INDEX idx_story_uid ON posts (story_uid);
+CREATE INDEX idx_user_id ON posts (user_id);
 
 

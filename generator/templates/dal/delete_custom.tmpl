@@ -12,33 +12,7 @@
 {{$funcCallParams := deleteFuncCallParams .}}
 {{$queryParams := deleteQueryParams .}}
 
-// {{$delNamePascal}} executes a custom bulk delete operation.
-// 
-// ⚠️ CAUTION - CACHE FLUSH NOTE ⚠️
-// Because bulk deletions modify multiple records simultaneously, it is difficult to 
-// track and selectively invalidate individual cache entries safely. Therefore, if 
-// this operation successfully deletes one or more rows, it will trigger a global 
-// FlushAllCache() to ensure local memory safety and broadcast cache invalidation 
-// to peer nodes via Pub/Sub. Use this operation carefully in high-read environments.
-//
-// PERFORMANCE NOTE: To prevent database locks, undo-log bloat, and replication lag, 
-// this operation requires a limit parameter. If the provided limit is <= 0 or > 5000, 
-// it will be automatically clamped to 5000.
-// 
-// Example usage for bulk deletion:
-//
-//	batchSize := 5000
-//	for {
-//		rowsAffected, err := repo.{{$delNamePascal}}(ctx{{if $queryParams}}, /* args */{{end}}, batchSize)
-//		if err != nil {
-//			// handle error appropriately
-//			break
-//		}
-//		if rowsAffected == 0 {
-//			break // All matching rows have been processed
-//		}
-//		time.Sleep(100 * time.Millisecond) // Yield database resources between batches
-//	}
+
 func (d *{{$repoName}}) {{$delNamePascal}}(ctx context.Context{{if $funcParams}}, {{$funcParams}}{{end}}) (int64, error) {
     if d.configProvider.BlockedWrites("{{$entityTableName}}") {
         return 0, ErrOperationBlocked

@@ -4,15 +4,6 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
-// CreateBulk performs a batch insert of multiple {{$entityStructName}} entities.
-//
-// CACHING & PERFORMANCE NOTE:
-// This operation safely batches inserts into chunks of 500 to avoid exceeding the 
-// database driver's maximum placeholder limits.
-// 
-// Because new items are being added to the database, this function will automatically 
-// call FlushListCache() to ensure that any cached paginated lists or count queries 
-// are invalidated and recalculated on their next request.
 func (d *{{$entityArgumentName}}Repository) CreateBulk(ctx context.Context, entities []*{{$entityStructName}}) ([]*{{$entityStructName}}, error) {
 	if d.configProvider.BlockedWrites("{{$entityTableName}}") {
 		return nil, ErrOperationBlocked
