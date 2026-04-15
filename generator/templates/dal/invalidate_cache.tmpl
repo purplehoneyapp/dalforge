@@ -18,6 +18,10 @@ func (d *{{$entityArgumentName}}Repository) FlushListCache() {
 
     // Invalidate cache entry across instances
     d.cacheProvider.FlushListCache("{{$entityTableName}}")
+    {{- else }}
+    // CACHING NOTE: listInvalidation is set to 'expire' for this entity.
+    // Global list cache flushing is intentionally bypassed. 
+    // Lists and Counts will refresh naturally via their configured TTL ({{.Root.Caching.ListExpirationSeconds}}s).
     {{- end}}
 }
 
@@ -50,6 +54,8 @@ func (d *{{$entityArgumentName}}Repository) onCacheFlushList() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
     d.countCache.Flush()
+    {{- else }}
+    // Ignored: listInvalidation is set to 'expire'
     {{- end }}
 }
 

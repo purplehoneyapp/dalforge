@@ -378,9 +378,15 @@ func validateListConfigs(lists []ListConfig, columns map[string]Column) []string
 // validateCachingConfig validates caching configuration.
 func validateCachingConfig(c CachingConfig) []string {
 	var errs []string
-	if strings.ToLower(c.Type) != "redis" {
-		errs = append(errs, fmt.Sprintf("caching type must be 'redis', got '%s'", c.Type))
+
+	// 🚀 NEW: Enforce 'memory' and reject 'redis' explicitly
+	lowerType := strings.ToLower(c.Type)
+	if lowerType == "redis" {
+		errs = append(errs, "caching type 'redis' is not implemented yet")
+	} else if lowerType != "memory" {
+		errs = append(errs, fmt.Sprintf("caching type must be 'memory', got '%s'", c.Type))
 	}
+
 	if c.SingleExpirationSeconds <= 1 {
 		errs = append(errs, "singleExpirationSeconds must be greater than 1")
 	}
@@ -393,6 +399,11 @@ func validateCachingConfig(c CachingConfig) []string {
 	if c.MaxItemsCount <= 10 {
 		errs = append(errs, "maxItemsCount must be greater than 10")
 	}
+
+	if c.ListInvalidation == "expire" && c.ListExpirationSeconds > 60 {
+		errs = append(errs, fmt.Sprintf("when listInvalidation is 'expire', listExpirationSeconds must be 60 or less to prevent severe data staleness. Got: %d", c.ListExpirationSeconds))
+	}
+
 	return errs
 }
 

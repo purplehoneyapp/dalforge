@@ -48,7 +48,7 @@ circuitbreaker:
     timeoutSeconds: 30 # how long to wait while in open state before trying to go to half open state.
     consecutiveFailures: 5 # how many times to fail in an closed state before we swithc to open state
 caching:
-  type: redis # Potential values could be: none, redis
+  type: memory # Currently supported is memory + pub/sub redis
   singleExpirationSeconds: 300
   listExpirationSeconds: 60
   listInvalidation: flush # potential values could be: expire, flush (default is flush)

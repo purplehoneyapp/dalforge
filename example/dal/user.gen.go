@@ -705,8 +705,8 @@ func (d *userRepository) delete(ctx context.Context, id int64) error {
 			deleted_at = NOW(), 
 			updated = NOW(), 
 			version = version + 1
-			, email = CONCAT(email, '-del-', UUID())
 			, uid = CONCAT(uid, '-del-', UUID())
+			, email = CONCAT(email, '-del-', UUID())
 		WHERE id = ? AND deleted_at IS NULL
 	`
 	

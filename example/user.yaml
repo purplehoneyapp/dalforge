@@ -64,7 +64,7 @@ circuitbreaker:
   timeoutSeconds: 20             # how long to wait while in open state before trying to go to half open state.
   consecutiveFailures: 4         # how many times to fail in an closed state before we swithc to open state
 caching:
-  type: redis # Potential values could be: none, redis. If none that no cache invalidation across multiple instances would happen. Most likely you would have redis here.
+  type: memory # Currently supported is memory + pub/sub redis
   singleExpirationSeconds: 300  # timeout for local cache for single rows
   listExpirationSeconds: 60     # timeout for local cache for multiple rows aka list functions
   listInvalidation: flush       # potential values could be: expire, flush (default is flush); expire means list cache will only expire. flush means that on any change of data list cache will be flushed.
