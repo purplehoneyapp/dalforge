@@ -4,6 +4,7 @@
   - new: pluck operations
   - improvement: better sql indexes created
   - fix: validate collision with function names
+  - fix: dont allow listBulk operation with unique keys in whereIn
 
 ## v1.5.1 - 2026-04-11
   - performance fix: bulk delete has limit of 5000 items. to delete everything needs to use for loop in calls.

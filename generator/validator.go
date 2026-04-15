@@ -226,9 +226,15 @@ func validateListsBulk(lists []ListBulkConfig, columns map[string]Column) []stri
 			errs = append(errs, fmt.Sprintf("listsBulk name '%s' must be in snake_case", list.Name))
 		}
 
-		// Validate WhereIn column exists
-		if list.WhereIn != "id" {
-			if _, exists := columns[list.WhereIn]; !exists {
+		// 🚀 NEW: Validate WhereIn for Unique constraints
+		if list.WhereIn != "" {
+			if list.WhereIn == "id" {
+				errs = append(errs, fmt.Sprintf("listsBulk '%s' uses whereIn on 'id' which is unique. Use 'getsBulk' instead.", list.Name))
+			} else if col, exists := columns[list.WhereIn]; exists {
+				if col.Unique {
+					errs = append(errs, fmt.Sprintf("listsBulk '%s' uses whereIn on a unique column '%s'. Use 'getsBulk' instead for optimal caching.", list.Name, list.WhereIn))
+				}
+			} else {
 				errs = append(errs, fmt.Sprintf("listsBulk '%s' refers to unknown whereIn column '%s'", list.Name, list.WhereIn))
 			}
 		}
