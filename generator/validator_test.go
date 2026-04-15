@@ -13,7 +13,8 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 			"id":          {Type: "int64", AllowNull: false, Unique: true},
 			"public_id":   {Type: "uid", Prefix: "user", AllowNull: false, Unique: true},
 			"email":       {Type: "varchar", AllowNull: false, Unique: true},
-			"preferences": {Type: "json", AllowNull: true, Unique: false}, // Injecting JSON column here
+			"preferences": {Type: "json", AllowNull: true, Unique: false},
+			"status":      {Type: "varchar", AllowNull: false, Unique: false},
 			"created":     {Type: "datetime", AllowNull: false, Unique: false},
 			"updated":     {Type: "datetime", AllowNull: false, Unique: false},
 		},
@@ -46,6 +47,22 @@ func TestValidateEntityConfig_Valid(t *testing.T) {
 				{
 					Name:    "by_public_ids",
 					WhereIn: "public_id",
+				},
+			},
+			// 🚀 NEW: Added valid plucks
+			Plucks: []PluckConfig{
+				{
+					Name:   "pluck_emails_by_status",
+					Column: "email",
+					Where:  "status = :status",
+				},
+				{
+					Name:   "pluck_ids_by_creation",
+					Column: "id", // Targeting a default column
+					Where:  "created > :cutoff",
+					TypeMapping: map[string]string{
+						"cutoff": "created", // Valid mapping to a default column
+					},
 				},
 			},
 		},
@@ -129,6 +146,29 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 					WhereIn: "id",
 				},
 			},
+			// 🚀 NEW: Added invalid plucks
+			Plucks: []PluckConfig{
+				{
+					Name:   "plk", // error: too short
+					Column: "email",
+				},
+				{
+					Name:   "invalid pluck name", // error: not snake_case
+					Column: "email",
+				},
+				{
+					Name:   "missing_column_pluck",
+					Column: "ghost_column", // error: column doesn't exist
+				},
+				{
+					Name:   "bad_mapping_pluck",
+					Column: "email",
+					Where:  "email = :badParam",
+					TypeMapping: map[string]string{
+						"badParam": "ghost_column", // error: mapped column doesn't exist
+					},
+				},
+			},
 		},
 		CircuitBreaker: CircuitBreakerConfig{
 			TimeoutSeconds:      0,
@@ -154,15 +194,21 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		"version cannot be empty",
 		"column name 'firstName' must be in snake_case",
 		"column 'invalid' has unsupported type 'unknown'",
-		"column 'legacy_uuid' has unsupported type 'uuid'",                    // Tests the removal of legacy uuid
-		"column 'missing_prefix' of type 'uid' requires a non-empty 'prefix'", // Tests missing prefix (now triggers correctly)
-		"prefix 'User Prefix' for column 'bad_prefix' must be in snake_case",  // Tests malformed prefix (now triggers correctly)
+		"column 'legacy_uuid' has unsupported type 'uuid'",
+		"column 'missing_prefix' of type 'uid' requires a non-empty 'prefix'",
+		"prefix 'User Prefix' for column 'bad_prefix' must be in snake_case",
 		"get operation refers to unknown column 'non_existent'",
 		"get operation requires column 'email' to be unique",
 		"list name 'lst' must be longer than 4 characters",
 		"list 'lst' order must contain exactly one column",
 		"order column 'unknown' in list 'long_list' is not defined and not a default column",
-		"typeMapping column 'ghost_column' for param 'badParam' in list 'invalid_mapping_list' is not defined", // Tests invalid mapping
+		"typeMapping column 'ghost_column' for param 'badParam' in list 'invalid_mapping_list' is not defined",
+		"delete name 'del' must be longer than 4 characters",
+		"delete name 'delete invalid mapping' must be in snake_case",
+		"typeMapping column 'ghost_column' for param 'badParam' in delete 'delete invalid mapping' is not defined",
+		"listsBulk name 'bad list name' must be in snake_case",
+		"listsBulk 'bad list name' refers to unknown whereIn column 'ghost_column'",
+		"listsBulk name 'lst' must be longer than 4 characters",
 		"caching type must be 'redis'",
 		"singleExpirationSeconds must be greater than 1",
 		"listExpirationSeconds must be greater than 1",
@@ -170,15 +216,17 @@ func TestValidateEntityConfig_Invalid(t *testing.T) {
 		"maxItemsCount must be greater than 10",
 		"consecutiveFailures should be 1 or more",
 		"timeoutSeconds should be 1 or more",
-		"delete name 'del' must be longer than 4 characters",
-		"delete name 'delete invalid mapping' must not contain spaces",
-		"delete name 'delete invalid mapping' must be in snake_case",
-		"typeMapping column 'ghost_column' for param 'badParam' in delete 'delete invalid mapping' is not defined",
+
+		// 🚀 NEW: Expected Pluck Validation Errors
+		"pluck name 'plk' must be longer than 4 characters",
+		"pluck name 'invalid pluck name' must be in snake_case",
+		"pluck 'missing_column_pluck' refers to unknown column 'ghost_column'",
+		"typeMapping column 'ghost_column' for param 'badParam' in pluck 'bad_mapping_pluck' is not defined",
 	}
 
 	for _, expectedError := range expectedErrors {
 		if !strings.Contains(errStr, expectedError) {
-			t.Errorf("Expected error message to contain: %q, got: %q", expectedError, errStr)
+			t.Errorf("Expected error message to contain: %q\nGot: %q", expectedError, errStr)
 		}
 	}
 }

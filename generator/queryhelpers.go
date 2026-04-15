@@ -654,3 +654,87 @@ func listBulkQueryWhere(list ListBulkConfig, softDelete bool) string {
 	}
 	return result
 }
+
+func pluckFuncParams(pluck PluckConfig, columns map[string]Column) (string, error) {
+	result := ""
+	params := extractUniqueParams(pluck.Where)
+	for _, param := range params {
+		colName := param
+		if mappedCol, ok := pluck.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+		var goType string
+		if colName == "id" {
+			goType = "int64"
+		} else if colName == "created" || colName == "updated" {
+			goType = "time.Time"
+		} else if col, ok := columns[colName]; ok {
+			goType = toGoType(col.Type, col.AllowNull)
+		} else {
+			return "", fmt.Errorf("missing column %s in pluck %s", colName, pluck.Name)
+		}
+		result += fmt.Sprintf("%s %s, ", CamelCaser(param), goType)
+	}
+	return strings.TrimSuffix(result, ", "), nil
+}
+
+func pluckFuncCallParams(pluck PluckConfig) string {
+	result := ""
+	params := extractUniqueParams(pluck.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+	return strings.TrimSuffix(result, ", ")
+}
+
+func pluckQueryParams(pluck PluckConfig) string {
+	result := ""
+	params := extractParams(pluck.Where)
+	for _, param := range params {
+		result += fmt.Sprintf("%s, ", CamelCaser(param))
+	}
+	return strings.TrimSuffix(result, ", ")
+}
+
+func pluckCacheKey(entityName string, pluck PluckConfig, columns map[string]Column) string {
+	key := fmt.Sprintf("%s_pluck_%s", SnakeCaser(entityName), SnakeCaser(pluck.Name))
+	params := extractUniqueParams(pluck.Where)
+	for range params {
+		key += ":%v"
+	}
+
+	paramStr := ""
+	for _, param := range params {
+		colName := param
+		if mappedCol, ok := pluck.TypeMapping[param]; ok {
+			colName = mappedCol
+		}
+		col := columns[colName]
+		goName := CamelCaser(param)
+		if col.AllowNull {
+			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
+		} else {
+			paramStr += fmt.Sprintf("%s, ", goName)
+		}
+	}
+	paramStr = strings.TrimSuffix(paramStr, ", ")
+
+	if paramStr == "" {
+		return fmt.Sprintf(`fmt.Sprintf("%s")`, key)
+	}
+	return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
+}
+
+func pluckQueryWhere(pluck PluckConfig, softDelete bool) string {
+	result := ""
+	if strings.TrimSpace(pluck.Where) != "" {
+		result += "(" + replaceParams(pluck.Where) + ")"
+	}
+	if softDelete {
+		if result != "" {
+			result += " AND "
+		}
+		result += "deleted_at IS NULL"
+	}
+	return result
+}

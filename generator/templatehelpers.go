@@ -2,6 +2,8 @@ package generator
 
 import (
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -201,50 +203,104 @@ func add(a, b int) int {
 	return a + b
 }
 
+// extractIndexColumns smartly extracts recognized column names from SQL strings
+func extractIndexColumns(where string, order string, columns map[string]Column) []string {
+	var cols []string
+	seen := make(map[string]bool)
+
+	// Regex to match whole words (potential column names)
+	re := regexp.MustCompile(`\b[a-zA-Z_][a-zA-Z0-9_]*\b`)
+
+	// 1. Extract from WHERE clause
+	whereWords := re.FindAllString(where, -1)
+	for _, w := range whereWords {
+		isBuiltIn := w == "id" || w == "created" || w == "updated" || w == "deleted_at"
+		_, isCustom := columns[w]
+
+		if (isCustom || isBuiltIn) && !seen[w] {
+			seen[w] = true
+			cols = append(cols, w)
+		}
+	}
+
+	// 2. Extract from ORDER clause (appended to the end of the index)
+	orderWords := re.FindAllString(order, -1)
+	for _, w := range orderWords {
+		isBuiltIn := w == "id" || w == "created" || w == "updated" || w == "deleted_at"
+		_, isCustom := columns[w]
+
+		if (isCustom || isBuiltIn) && !seen[w] {
+			seen[w] = true
+			cols = append(cols, w)
+		}
+	}
+
+	return cols
+}
+
 // Replace the existing listSQLIndexes function in generator/templatehelpers.go
-func listSQLIndexes(tableName string, columns map[string]Column, lists []ListConfig, listsBulk []ListBulkConfig) string {
-	// Create a set to keep track of columns that need an index.
-	indexedColumns := make(map[string]bool)
-	defaultColumns := map[string]bool{
-		"created": true,
-		"updated": true,
+func listSQLIndexes(tableName string, columns map[string]Column, lists []ListConfig, listsBulk []ListBulkConfig, plucks []PluckConfig, deletes []DeleteConfig) string {
+	// Use a map to deduplicate identical composite indexes across different operations
+	indexMap := make(map[string]string)
+
+	addIndex := func(cols []string) {
+		if len(cols) == 0 {
+			return
+		}
+
+		// Create a unique signature for this column combination
+		colSignature := strings.Join(cols, "_")
+
+		// Truncate signature if it exceeds MySQL's 64 character index name limit
+		idxName := fmt.Sprintf("idx_%s", colSignature)
+		if len(idxName) > 64 {
+			idxName = idxName[:64]
+		}
+
+		colStr := strings.Join(cols, ", ")
+		indexMap[colSignature] = fmt.Sprintf("CREATE INDEX %s ON %ss (%s);\n", idxName, SnakeCaser(tableName), colStr)
 	}
 
-	// Iterate over each standard list configuration.
+	// 1. Process Standard Lists
 	for _, list := range lists {
-		for colName := range columns {
-			if strings.Contains(list.Where, colName) || strings.Contains(list.Order, colName) {
-				indexedColumns[colName] = true
-			}
-		}
-		for colName := range defaultColumns {
-			if strings.Contains(list.Where, colName) || strings.Contains(list.Order, colName) {
-				indexedColumns[colName] = true
-			}
-		}
+		addIndex(extractIndexColumns(list.Where, list.Order, columns))
 	}
 
-	// Iterate over the new bulk list configurations.
+	// 2. Process Bulk Lists
 	for _, listBulk := range listsBulk {
-		if listBulk.WhereIn != "id" && listBulk.WhereIn != "" {
-			indexedColumns[listBulk.WhereIn] = true
+		cols := extractIndexColumns(listBulk.Where, "", columns)
+		if listBulk.WhereIn != "" && listBulk.WhereIn != "id" {
+			// Append the IN column to the end of the index
+			cols = append(cols, listBulk.WhereIn)
 		}
-
-		// 2. NEW: Parse and index columns used in the Where clause
-		if listBulk.Where != "" {
-			for colName := range columns {
-				if strings.Contains(listBulk.Where, colName) {
-					indexedColumns[colName] = true
-				}
-			}
-		}
+		addIndex(cols)
 	}
 
-	// Build the CREATE INDEX statements.
+	// 3. Process Plucks (Covering Indexes)
+	for _, pluck := range plucks {
+		cols := extractIndexColumns(pluck.Where, "", columns)
+		// Append the selected column to the index to create a "Covering Index"
+		if pluck.Column != "id" {
+			cols = append(cols, pluck.Column)
+		}
+		addIndex(cols)
+	}
+
+	// 4. Process Deletes
+	for _, del := range deletes {
+		addIndex(extractIndexColumns(del.Where, "", columns))
+	}
+
+	// Sort the map keys to ensure deterministic SQL generation output
+	var keys []string
+	for k := range indexMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var builder strings.Builder
-	for colName := range indexedColumns {
-		builder.WriteString(fmt.Sprintf("CREATE INDEX idx_%s ON %ss (%s);\n",
-			SnakeCaser(colName), SnakeCaser(tableName), SnakeCaser(colName)))
+	for _, k := range keys {
+		builder.WriteString(indexMap[k])
 	}
 
 	return builder.String()

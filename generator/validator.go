@@ -138,6 +138,35 @@ func validateOperationConfig(ops OperationConfig, columns map[string]Column) []s
 	// Validate ListsBulk (NEW)
 	errs = append(errs, validateListsBulk(ops.ListsBulk, columns)...)
 
+	errs = append(errs, validatePlucks(ops.Plucks, columns)...)
+
+	return errs
+}
+
+func validatePlucks(plucks []PluckConfig, columns map[string]Column) []string {
+	var errs []string
+	allowedDefaults := map[string]bool{"created": true, "id": true, "updated": true}
+
+	for _, pluck := range plucks {
+		if len(pluck.Name) <= 4 {
+			errs = append(errs, fmt.Sprintf("pluck name '%s' must be longer than 4 characters", pluck.Name))
+		}
+		if !isSnakeCase(pluck.Name) {
+			errs = append(errs, fmt.Sprintf("pluck name '%s' must be in snake_case", pluck.Name))
+		}
+
+		// Validate target column exists
+		if _, exists := columns[pluck.Column]; !exists && !allowedDefaults[pluck.Column] {
+			errs = append(errs, fmt.Sprintf("pluck '%s' refers to unknown column '%s'", pluck.Name, pluck.Column))
+		}
+
+		// Validate TypeMapping targets exist
+		for paramName, mappedCol := range pluck.TypeMapping {
+			if _, exists := columns[mappedCol]; !exists && !allowedDefaults[mappedCol] {
+				errs = append(errs, fmt.Sprintf("typeMapping column '%s' for param '%s' in pluck '%s' is not defined", mappedCol, paramName, pluck.Name))
+			}
+		}
+	}
 	return errs
 }
 

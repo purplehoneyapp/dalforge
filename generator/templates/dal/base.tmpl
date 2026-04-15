@@ -145,6 +145,20 @@ type {{$entityStructName}}Repository interface {
     {{- end }}
 {{- end }}
 
+{{- /* Plucks Interface */ -}}
+{{- if and .Operations .Operations.Plucks }}
+    {{- range .Operations.Plucks }}
+        {{- $colType := "interface{}" }}
+        {{- if eq .Column "id" }}{{ $colType = "int64" }}
+        {{- else if eq .Column "created" }}{{ $colType = "time.Time" }}
+        {{- else if eq .Column "updated" }}{{ $colType = "time.Time" }}
+        {{- else }}{{ $colType = trimPrefix (toGoType (index $.Columns .Column).Type false) "*" }}{{ end }}
+    // {{pascalCase .Name}} fetches a list of {{.Column}} values.
+    // CACHING NOTE: Uses the shared listCache for invalidation.
+    {{pascalCase .Name}}(ctx context.Context{{if pluckFuncParams . $.Columns}}, {{pluckFuncParams . $.Columns}}{{end}}) ([]{{$colType}}, error)
+    {{- end }}
+{{- end }}
+
 {{- if and .Operations .Operations.Lists }}
     {{- range .Operations.Lists }}
     {{pascalCase .Name}}(ctx context.Context, {{listFuncParams . $.Columns}}) ([]*{{$entityStructName}}, error)
@@ -323,6 +337,12 @@ func (d *{{$entityArgumentName}}Repository) getCacheKey(id int64) string {
 {{- if and .Operations .Operations.ListsBulk }}
     {{- range .Operations.ListsBulk }}
 {{template "list_bulk_operation" (dict "Root" $ "ListBulk" .)}}
+    {{- end }}
+{{- end }}
+
+{{- if and .Operations .Operations.Plucks }}
+    {{- range .Operations.Plucks }}
+{{template "pluck_operation" (dict "Root" $ "Pluck" .)}}
     {{- end }}
 {{- end }}
 

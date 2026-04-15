@@ -67,6 +67,12 @@ func NewGenerator() (*Generator, error) {
 		"listBulkInnerCallArgs":        listBulkInnerCallArgs,
 		"listBulkQueryWhere":           listBulkQueryWhere,
 		"extractParams":                extractParams,
+		"trimPrefix":                   strings.TrimPrefix,
+		"pluckFuncParams":              pluckFuncParams,
+		"pluckFuncCallParams":          pluckFuncCallParams,
+		"pluckQueryParams":             pluckQueryParams,
+		"pluckCacheKey":                pluckCacheKey,
+		"pluckQueryWhere":              pluckQueryWhere,
 	}
 
 	dalTmpl, err := template.New("dal").Funcs(funcMap).ParseFS(templateFS, "templates/dal/*.tmpl")
@@ -104,6 +110,31 @@ func (g *Generator) GenerateDAL(yamlInput string) (string, error) {
 	return buf.String(), nil
 }
 
+// Add this helper function in generator/dal.go
+func printScalabilityWarnings(config EntityConfig) {
+	checkOrClause := func(opType, opName, where string) {
+		// Look for " OR " with spaces to avoid matching words like "ORDER"
+		if strings.Contains(strings.ToUpper(where), " OR ") {
+			fmt.Printf("⚠️  SCALABILITY WARNING: %s operation '%s' in entity '%s' contains an 'OR' clause.\n", opType, opName, config.Name)
+			fmt.Printf("   -> MySQL struggles to optimize 'OR' conditions and may resort to Full Table Scans.\n")
+			fmt.Printf("   -> For large datasets (30M+ rows), consider splitting this into separate operations.\n\n")
+		}
+	}
+
+	for _, l := range config.Operations.Lists {
+		checkOrClause("List", l.Name, l.Where)
+	}
+	for _, lb := range config.Operations.ListsBulk {
+		checkOrClause("ListBulk", lb.Name, lb.Where)
+	}
+	for _, p := range config.Operations.Plucks {
+		checkOrClause("Pluck", p.Name, p.Where)
+	}
+	for _, d := range config.Operations.Deletes {
+		checkOrClause("Delete", d.Name, d.Where)
+	}
+}
+
 func (g *Generator) parseYAML(yamlInput string) (EntityConfig, error) {
 	var config EntityConfig
 	if err := yaml.Unmarshal([]byte(yamlInput), &config); err != nil {
@@ -128,6 +159,10 @@ func (g *Generator) parseYAML(yamlInput string) (EntityConfig, error) {
 	}
 
 	err := ValidateEntityConfig(config)
+
+	if err == nil {
+		printScalabilityWarnings(config)
+	}
 
 	return config, err
 }
@@ -206,6 +241,13 @@ type UpdateBulkConfig struct {
 	WhereIn string   `yaml:"whereIn"`
 }
 
+type PluckConfig struct {
+	Name        string            `yaml:"name"`
+	Column      string            `yaml:"column"`
+	Where       string            `yaml:"where"`
+	TypeMapping map[string]string `yaml:"typeMapping"`
+}
+
 type OperationConfig struct {
 	Gets        []string           `yaml:"gets"`
 	GetsBulk    []string           `yaml:"getsBulk"` // <-- NEW: For batch gets via IN clause
@@ -213,6 +255,7 @@ type OperationConfig struct {
 	ListsBulk   []ListBulkConfig   `yaml:"listsBulk"`
 	Deletes     []DeleteConfig     `yaml:"deletes"`
 	UpdatesBulk []UpdateBulkConfig `yaml:"updatesBulk"` // <-- NEW: For bulk partial updates
+	Plucks      []PluckConfig      `yaml:"plucks"`
 	Write       bool               `yaml:"write"`
 	Delete      bool               `yaml:"delete"`
 	SoftDelete  bool               `yaml:"softDelete"`

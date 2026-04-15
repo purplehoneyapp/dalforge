@@ -1,0 +1,95 @@
+{{define "pluck_operation"}}
+{{- $entityTableName := snakeCase .Root.Name }}
+{{- $entityArgumentName := camelCase .Root.Name }}
+{{- $pluck := .Pluck }}
+{{- $funcName := pascalCase $pluck.Name }}
+
+{{- /* Determine Go type to return */ -}}
+{{- $colType := "interface{}" }}
+{{- if eq $pluck.Column "id" }}{{ $colType = "int64" }}
+{{- else if eq $pluck.Column "created" }}{{ $colType = "time.Time" }}
+{{- else if eq $pluck.Column "updated" }}{{ $colType = "time.Time" }}
+{{- else }}{{ $colType = trimPrefix (toGoType (index .Root.Columns $pluck.Column).Type false) "*" }}{{ end }}
+
+func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context{{if pluckFuncParams $pluck .Root.Columns}}, {{pluckFuncParams $pluck .Root.Columns}}{{end}}) ([]{{$colType}}, error) {
+    if d.configProvider.BlockedReads("{{$entityTableName}}") {
+        return nil, ErrOperationBlocked
+    }
+
+    const operation = "pluck_{{$pluck.Name | snakeCase}}"
+    d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
+
+    cacheKey := {{pluckCacheKey $entityTableName $pluck .Root.Columns}}
+    val, found := d.listCache.Get(cacheKey)
+    if found {
+        cachedSlice, ok := val.([]{{$colType}})
+        if !ok {
+            return nil, fmt.Errorf("{{$entityArgumentName}}Repository.{{$funcName}}: Cache returned wrong type")
+        }
+        d.telemetryProvider.IncCacheHit("{{$entityTableName}}", operation)
+        return cachedSlice, nil
+    }
+
+    d.telemetryProvider.IncCacheMiss("{{$entityTableName}}", operation)
+
+    result, err := d.dbBreaker.Execute(func() (interface{}, error) {
+        return d.{{camelCase $pluck.Name}}(ctx{{if pluckFuncCallParams $pluck}}, {{pluckFuncCallParams $pluck}}{{end}})
+    })
+
+    if err != nil {
+        return nil, err
+    }
+
+    slicedResult := result.([]{{$colType}})
+    
+    // Store in the shared listCache
+    d.listCache.Set(cacheKey, slicedResult, time.Second*time.Duration({{.Root.Caching.ListExpirationSeconds}}))
+
+    return slicedResult, nil
+}
+
+func (d *{{$entityArgumentName}}Repository) {{camelCase $pluck.Name}}(ctx context.Context{{if pluckFuncParams $pluck .Root.Columns}}, {{pluckFuncParams $pluck .Root.Columns}}{{end}}) ([]{{$colType}}, error) {
+    const operation = "pluck_{{$pluck.Name | snakeCase}}"
+    dbStart := time.Now()
+
+    query := `SELECT {{$pluck.Column | snakeCase}} FROM {{$entityTableName}}s WHERE {{pluckQueryWhere $pluck .Root.Operations.SoftDelete}}`
+
+    db, dbErr := d.dbProvider.GetDatabase("{{$entityArgumentName}}", false)
+    if dbErr != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, dbErr
+    }
+
+    {{if pluckQueryParams $pluck}}
+    rows, err := db.QueryContext(ctx, query, {{pluckQueryParams $pluck}})
+    {{else}}
+    rows, err := db.QueryContext(ctx, query)
+    {{end}}
+
+    if err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, fmt.Errorf("failed to query pluck %s: %w", operation, err)
+    }
+    defer rows.Close()
+
+    var results []{{$colType}}
+    for rows.Next() {
+        var item {{$colType}}
+        if err := rows.Scan(&item); err != nil {
+            d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+            return nil, fmt.Errorf("failed to scan pluck item: %w", err)
+        }
+        results = append(results, item)
+    }
+
+    if err = rows.Err(); err != nil {
+        d.telemetryProvider.IncDBError("{{$entityTableName}}", operation)
+        return nil, fmt.Errorf("rows error: %w", err)
+    }
+
+    d.telemetryProvider.IncDBRequest("{{$entityTableName}}", operation)
+    d.telemetryProvider.ObserveDBLatency("{{$entityTableName}}", operation, time.Since(dbStart).Seconds())
+
+    return results, nil
+}
+{{end}}

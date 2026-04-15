@@ -17,9 +17,9 @@ CREATE TABLE {{.Name | snakeCase}}s (
 CREATE UNIQUE INDEX idx_{{. | snakeCase}} ON {{$.Name | snakeCase}}s ({{. | snakeCase}});
 {{- end}}
 
-# Indexes that serve all the list operations
-{{ listSQLIndexes .Name .Columns .Operations.Lists .Operations.ListsBulk }}
+# Indexes that serve all operations
+{{ listSQLIndexes .Name .Columns .Operations.Lists .Operations.ListsBulk .Operations.Plucks .Operations.Deletes }}
 
 {{if .Operations.SoftDelete}}
-CREATE INDEX idx_deleted_at ON users (deleted_at);
+CREATE INDEX idx_deleted_at ON {{$.Name | snakeCase}}s (deleted_at);
 {{end}}

@@ -18,11 +18,11 @@ CREATE TABLE users (
 CREATE UNIQUE INDEX idx_email ON users (email);
 CREATE UNIQUE INDEX idx_uid ON users (uid);
 
-# Indexes that serve all the list operations
-CREATE INDEX idx_birthdate ON users (birthdate);
+# Indexes that serve all operations
 CREATE INDEX idx_age ON users (age);
-CREATE INDEX idx_created ON users (created);
-CREATE INDEX idx_status ON users (status);
+CREATE INDEX idx_age_created ON users (age, created);
+CREATE INDEX idx_birthdate ON users (birthdate);
+CREATE INDEX idx_status_created ON users (status, created);
 
 
 

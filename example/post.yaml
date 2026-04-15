@@ -40,6 +40,10 @@ operations:
       where: "expires_at < :cutoff OR (revoked = true AND updated < :cutoff)"
       typeMapping:
         cutoff: expires_at
+  plucks:
+    - name: get_story_uids_by_user
+      column: story_uid
+      where: user_id = :user_id
 circuitbreaker:
     timeoutSeconds: 30 # how long to wait while in open state before trying to go to half open state.
     consecutiveFailures: 5 # how many times to fail in an closed state before we swithc to open state
