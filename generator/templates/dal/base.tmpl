@@ -16,6 +16,7 @@ import (
     _ "embed"
     "errors"
     "strings"
+    "sync/atomic"
 
     "fmt"
     "time"
@@ -210,6 +211,7 @@ type {{$entityArgumentName}}Repository struct {
     configProvider      ConfigProvider
 	dbBreaker           *gobreaker.CircuitBreaker
     telemetryProvider TelemetryProvider
+    listEpoch         atomic.Int64
 }
 
 // New{{$entityStructName}}Repository now returns the {{$entityStructName}}Repository interface.
@@ -265,6 +267,8 @@ func New{{$entityStructName}}Repository(
 	listCache := cache.New(5*time.Minute, 10*time.Minute)
     countCache := cache.New(5*time.Minute, 10*time.Minute)
 
+    
+
     newDAL := &{{$entityArgumentName}}Repository{
         dbProvider:     provider,
         cache:          singleCache,
@@ -275,6 +279,10 @@ func New{{$entityStructName}}Repository(
 		dbBreaker:      gobreaker.NewCircuitBreaker(dbSettings),
         telemetryProvider: telemetry,
     }
+
+    // Initialize the epoch and register the Pub/Sub handler
+    newDAL.listEpoch.Store(time.Now().UnixNano())
+    cacheProvider.OnBumpEpoch("{{$entityTableName}}", newDAL.onBumpEpoch)
 
     // initialize cache invalidation handler
     cacheProvider.OnCacheInvalidated("{{$entityTableName}}", newDAL.onCacheInvalidated)

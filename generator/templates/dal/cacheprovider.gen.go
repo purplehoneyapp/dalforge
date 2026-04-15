@@ -9,6 +9,8 @@ type CacheProvider interface {
 	OnCacheInvalidated(entityName string, handler func(string))
 	OnCacheFlushList(entityName string, handler func())
 	OnCacheFlushItem(entityName string, handler func())
+	BumpEpoch(entityName string) error
+	OnBumpEpoch(entityName string, handler func())
 	Close()
 }
 
@@ -37,3 +39,5 @@ func (d NoopCacheProvider) FlushItemCache(entityName string) error { // <-- NEW
 func (d NoopCacheProvider) OnCacheInvalidated(entityName string, handler func(string)) {}
 func (d NoopCacheProvider) OnCacheFlushList(entityName string, handler func())         {}
 func (d NoopCacheProvider) OnCacheFlushItem(entityName string, handler func())         {} // <--
+func (d NoopCacheProvider) BumpEpoch(entityName string) error                          { return nil }
+func (d NoopCacheProvider) OnBumpEpoch(entityName string, handler func())              {}

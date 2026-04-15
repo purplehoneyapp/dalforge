@@ -19,7 +19,7 @@ func (d *{{$entityArgumentName}}Repository) {{$funcName}}(ctx context.Context{{i
     const operation = "pluck_{{$pluck.Name | snakeCase}}"
     d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
-    cacheKey := {{pluckCacheKey $entityTableName $pluck .Root.Columns}}
+    cacheKey := {{pluckCacheKey $entityTableName $pluck .Root.Columns .Root.Caching}}
     val, found := d.listCache.Get(cacheKey)
     if found {
         cachedSlice, ok := val.([]{{$colType}})

@@ -1,5 +1,8 @@
 # Version History
 
+## v1.5.3 - 2026-04-15
+  - new: epoch list invalidation for caching
+
 ## v1.5.2 - 2026-04-15
   - new: pluck operations
   - improvement: better sql indexes created

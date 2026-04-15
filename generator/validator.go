@@ -393,15 +393,21 @@ func validateCachingConfig(c CachingConfig) []string {
 	if c.ListExpirationSeconds <= 1 {
 		errs = append(errs, "listExpirationSeconds must be greater than 1")
 	}
-	if c.ListInvalidation != "flush" && c.ListInvalidation != "expire" {
-		errs = append(errs, fmt.Sprintf("listInvalidation must be 'flush' or 'expire', got '%s'", c.ListInvalidation))
-	}
 	if c.MaxItemsCount <= 10 {
 		errs = append(errs, "maxItemsCount must be greater than 10")
 	}
 
 	if c.ListInvalidation == "expire" && c.ListExpirationSeconds > 60 {
 		errs = append(errs, fmt.Sprintf("when listInvalidation is 'expire', listExpirationSeconds must be 60 or less to prevent severe data staleness. Got: %d", c.ListExpirationSeconds))
+	}
+
+	if c.ListInvalidation != "flush" && c.ListInvalidation != "expire" && c.ListInvalidation != "epoch" {
+		errs = append(errs, fmt.Sprintf("listInvalidation must be 'flush', 'expire', or 'epoch', got '%s'", c.ListInvalidation))
+	}
+
+	// Update the staleness guardrail
+	if (c.ListInvalidation == "expire" || c.ListInvalidation == "epoch") && c.ListExpirationSeconds > 60 {
+		errs = append(errs, fmt.Sprintf("when listInvalidation is '%s', listExpirationSeconds must be 60 or less to prevent memory bloat. Got: %d", c.ListInvalidation, c.ListExpirationSeconds))
 	}
 
 	return errs

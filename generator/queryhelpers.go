@@ -323,69 +323,77 @@ func countFuncParams(list ListConfig, columns map[string]Column) (string, error)
 
 // Create cache key similar to this:
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v:%d:%d", age, startID, pageSize)
-func listCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
+func listCacheKey(entityName string, list ListConfig, columns map[string]Column, caching CachingConfig) string {
 	key := fmt.Sprintf("%s_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
-	params := extractUniqueParams(list.Where) // Deduplicated!
+	params := extractUniqueParams(list.Where)
+
+	if caching.ListInvalidation == "epoch" {
+		key += ":epoch_%d"
+	}
 	for range params {
 		key += ":%v"
 	}
 	key += ":%d:%d"
 
 	paramStr := ""
+	if caching.ListInvalidation == "epoch" {
+		paramStr += "d.getEpoch(), "
+	}
+
 	for _, param := range params {
 		colName := param
 		if mappedCol, ok := list.TypeMapping[param]; ok {
 			colName = mappedCol
 		}
-
 		col := columns[colName]
 		goName := CamelCaser(param)
-
-		// If the column allows nulls, it's a pointer in Go.
 		if col.AllowNull {
 			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
 	}
-
 	paramStr += "startID, pageSize"
 	return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 }
 
 // Create cache key similar to this:
 // fmt.Sprintf("{{$entityTableName}}_{{.List.Name | snakeCase}}:%v", age)
-func countCacheKey(entityName string, list ListConfig, columns map[string]Column) string {
+func countCacheKey(entityName string, list ListConfig, columns map[string]Column, caching CachingConfig) string {
 	key := fmt.Sprintf("%s_count_%s", SnakeCaser(entityName), SnakeCaser(list.Name))
-	params := extractUniqueParams(list.Where) // Deduplicated!
+	params := extractUniqueParams(list.Where)
+
+	if caching.ListInvalidation == "epoch" {
+		key += ":epoch_%d"
+	}
 	for range params {
 		key += ":%v"
 	}
 
 	paramStr := ""
+	if caching.ListInvalidation == "epoch" {
+		paramStr += "d.getEpoch(), "
+	}
+
 	for _, param := range params {
 		colName := param
 		if mappedCol, ok := list.TypeMapping[param]; ok {
 			colName = mappedCol
 		}
-
 		col := columns[colName]
 		goName := CamelCaser(param)
-
 		if col.AllowNull {
 			paramStr += fmt.Sprintf(`func() interface{} { if %s == nil { return "<<null>>" }; return *%s }(), `, goName, goName)
 		} else {
 			paramStr += fmt.Sprintf("%s, ", goName)
 		}
 	}
-
 	paramStr = strings.TrimSuffix(paramStr, ", ")
 
 	if paramStr == "" {
 		return fmt.Sprintf(`fmt.Sprintf("%s")`, key)
-	} else {
-		return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 	}
+	return fmt.Sprintf(`fmt.Sprintf("%s", %s)`, key, paramStr)
 }
 
 // deleteQuery generates the raw SQL for a custom bulk delete operation.
@@ -696,14 +704,22 @@ func pluckQueryParams(pluck PluckConfig) string {
 	return strings.TrimSuffix(result, ", ")
 }
 
-func pluckCacheKey(entityName string, pluck PluckConfig, columns map[string]Column) string {
+func pluckCacheKey(entityName string, pluck PluckConfig, columns map[string]Column, caching CachingConfig) string {
 	key := fmt.Sprintf("%s_pluck_%s", SnakeCaser(entityName), SnakeCaser(pluck.Name))
 	params := extractUniqueParams(pluck.Where)
+
+	if caching.ListInvalidation == "epoch" {
+		key += ":epoch_%d"
+	}
 	for range params {
 		key += ":%v"
 	}
 
 	paramStr := ""
+	if caching.ListInvalidation == "epoch" {
+		paramStr += "d.getEpoch(), "
+	}
+
 	for _, param := range params {
 		colName := param
 		if mappedCol, ok := pluck.TypeMapping[param]; ok {

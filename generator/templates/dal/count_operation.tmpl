@@ -12,7 +12,7 @@ func (d *{{$entityArgumentName}}Repository) Count{{.List.Name | pascalCase}}(ctx
 	const operation = "count_{{.List.Name | snakeCase}}"
 	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 	
-	cacheKey := {{countCacheKey $entityTableName .List .Root.Columns}}
+	cacheKey := {{countCacheKey $entityTableName .List .Root.Columns .Root.Caching}}
 	val, found := d.countCache.Get(cacheKey)
 	if found {
 		count, ok := val.(int64)

@@ -3,6 +3,18 @@
 {{- $entityTableName := snakeCase .Root.Name }}
 {{- $entityArgumentName := camelCase .Root.Name }}
 
+func (d *{{$entityArgumentName}}Repository) getEpoch() int64 {
+    return d.listEpoch.Load()
+}
+
+func (d *{{$entityArgumentName}}Repository) bumpEpoch() {
+    d.listEpoch.Store(time.Now().UnixNano())
+}
+
+func (d *{{$entityArgumentName}}Repository) onBumpEpoch() {
+    d.bumpEpoch()
+}
+
 func (d *{{$entityArgumentName}}Repository) InvalidateCache(entity *{{$entityStructName}}) {
     cacheKey := d.getCacheKey(entity.ID)
 	d.cache.Delete(cacheKey)
@@ -15,13 +27,12 @@ func (d *{{$entityArgumentName}}Repository) FlushListCache() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
     d.countCache.Flush()
-
-    // Invalidate cache entry across instances
     d.cacheProvider.FlushListCache("{{$entityTableName}}")
+    {{- else if eq .Root.Caching.ListInvalidation "epoch"}}
+    d.bumpEpoch()
+    d.cacheProvider.BumpEpoch("{{$entityTableName}}")
     {{- else }}
-    // CACHING NOTE: listInvalidation is set to 'expire' for this entity.
-    // Global list cache flushing is intentionally bypassed. 
-    // Lists and Counts will refresh naturally via their configured TTL ({{.Root.Caching.ListExpirationSeconds}}s).
+    // CACHING NOTE: listInvalidation is set to 'expire'. Global list caching ignored.
     {{- end}}
 }
 
@@ -32,9 +43,10 @@ func (d *{{$entityArgumentName}}Repository) FlushAllCache() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
 	d.listCache.Flush()
 	d.countCache.Flush()
-
-	// Invalidate cache entries across instances
 	d.cacheProvider.FlushListCache("{{$entityTableName}}")
+    {{- else if eq .Root.Caching.ListInvalidation "epoch"}}
+    d.bumpEpoch()
+    d.cacheProvider.BumpEpoch("{{$entityTableName}}")
     {{- end}}
 	d.cacheProvider.FlushItemCache("{{$entityTableName}}")
 }
@@ -54,8 +66,8 @@ func (d *{{$entityArgumentName}}Repository) onCacheFlushList() {
     {{- if eq .Root.Caching.ListInvalidation "flush"}}
     d.listCache.Flush()
     d.countCache.Flush()
-    {{- else }}
-    // Ignored: listInvalidation is set to 'expire'
+    {{- else if eq .Root.Caching.ListInvalidation "epoch"}}
+    d.bumpEpoch()
     {{- end }}
 }
 

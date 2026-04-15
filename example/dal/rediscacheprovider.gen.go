@@ -25,8 +25,9 @@ type RedisCacheProvider struct {
 	pubsubs           []*redis.PubSub // track active subscriptions
 	mu                sync.RWMutex
 
-	isClosed  bool
-	telemetry TelemetryProvider
+	isClosed          bool
+	telemetry         TelemetryProvider
+	bumpEpochHandlers map[string]func()
 }
 
 // NewRedisCacheProvider creates a new instance with the given Redis config.
@@ -326,4 +327,55 @@ func (p *RedisCacheProvider) Close() {
 		_ = p.client.Close()
 	}
 	p.isClosed = true
+}
+
+func (p *RedisCacheProvider) BumpEpoch(entityName string) error {
+	if p.isClosed {
+		return errors.New("cache provider is closed")
+	}
+	go func() {
+		channel := fmt.Sprintf("cache_bump_epoch_%s", entityName)
+		for i := 0; i < 3; i++ {
+			err := p.client.Publish(p.ctx, channel, entityName).Err()
+			if err == nil {
+				p.telemetry.IncCachePubSubPublish(p.options.Addr)
+				log.Debugf("Published cache_bump_epoch: %s \n", entityName)
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
+	return nil
+}
+
+// 4. Implement OnBumpEpoch and listenForBumpEpoch
+func (p *RedisCacheProvider) OnBumpEpoch(entityName string, handler func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, exists := p.bumpEpochHandlers[entityName]; !exists {
+		p.bumpEpochHandlers[entityName] = handler
+		go p.listenForBumpEpoch(entityName)
+	}
+}
+
+func (p *RedisCacheProvider) listenForBumpEpoch(entityName string) {
+	time.Sleep(2 * time.Second)
+	channel := fmt.Sprintf("cache_bump_epoch_%s", entityName)
+	pubsub := p.client.Subscribe(p.ctx, channel)
+
+	p.mu.Lock()
+	p.pubsubs = append(p.pubsubs, pubsub)
+	p.mu.Unlock()
+
+	defer pubsub.Close()
+
+	for range pubsub.Channel() {
+		p.mu.RLock()
+		handler, exists := p.bumpEpochHandlers[entityName]
+		p.mu.RUnlock()
+		if exists {
+			handler()
+			p.telemetry.IncCachePubSubReceive(p.options.Addr)
+		}
+	}
 }

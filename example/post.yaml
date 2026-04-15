@@ -51,5 +51,5 @@ caching:
   type: memory # Currently supported is memory + pub/sub redis
   singleExpirationSeconds: 300
   listExpirationSeconds: 60
-  listInvalidation: flush # potential values could be: expire, flush (default is flush)
+  listInvalidation: epoch # potential values could be: expire, flush, epoch
   maxItemsCount: 1000000 # max number of items in cache

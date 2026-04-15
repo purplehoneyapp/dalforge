@@ -17,6 +17,7 @@ type FakeCacheProvider struct {
 	invalidationCallbacks map[string]func(string)
 	flushCallbacks        map[string]func()
 	flushItemCallbacks    map[string]func() // <-- NEW: Added to track flush item handlers
+	bumpEpochCallbacks    map[string]func()
 }
 
 func NewFakeCacheProvider() *FakeCacheProvider {
@@ -24,6 +25,7 @@ func NewFakeCacheProvider() *FakeCacheProvider {
 		invalidationCallbacks: make(map[string]func(string)),
 		flushCallbacks:        make(map[string]func()),
 		flushItemCallbacks:    make(map[string]func()), // <-- NEW: Initialize the map
+		bumpEpochCallbacks:    make(map[string]func()),
 	}
 }
 
@@ -75,6 +77,17 @@ func (f *FakeCacheProvider) SimulateCacheInvalidation(entityName, cacheKey strin
 	if callback, ok := f.invalidationCallbacks[entityName]; ok {
 		callback(cacheKey)
 	}
+}
+
+func (f *FakeCacheProvider) BumpEpoch(entityName string) error {
+	if callback, ok := f.bumpEpochCallbacks[entityName]; ok {
+		callback()
+	}
+	return nil
+}
+
+func (f *FakeCacheProvider) OnBumpEpoch(entityName string, handler func()) {
+	f.bumpEpochCallbacks[entityName] = handler
 }
 
 func TestPubSubCacheInvalidation(t *testing.T) {

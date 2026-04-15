@@ -67,5 +67,5 @@ caching:
   type: memory # Currently supported is memory + pub/sub redis
   singleExpirationSeconds: 300  # timeout for local cache for single rows
   listExpirationSeconds: 60     # timeout for local cache for multiple rows aka list functions
-  listInvalidation: flush       # potential values could be: expire, flush (default is flush); expire means list cache will only expire. flush means that on any change of data list cache will be flushed.
+  listInvalidation: epoch       # potential values could be: expire, flush, epoch
   maxItemsCount: 100000         # max number of items in cache

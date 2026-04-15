@@ -11,7 +11,7 @@ func (d *{{$entityArgumentName}}Repository) {{.List.Name | pascalCase}}(ctx cont
 	const operation = "{{.List.Name | snakeCase}}"
 	d.telemetryProvider.IncDALOperation("{{$entityTableName}}", operation)
 
-    cacheKey := {{listCacheKey $entityTableName .List .Root.Columns}}
+    cacheKey := {{listCacheKey $entityTableName .List .Root.Columns .Root.Caching}}
     val, found := d.listCache.Get(cacheKey)
     if found {
         entityIDs, ok := val.([]int64)
