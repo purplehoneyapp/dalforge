@@ -53,6 +53,7 @@ func NewRedisCacheProvider(addr, password string, db int, telemetry TelemetryPro
 		handlers:          make(map[string]func(string)),
 		flushListHandlers: make(map[string]func()),
 		flushItemHandlers: make(map[string]func()),
+		bumpEpochHandlers: make(map[string]func()),
 		telemetry:         telemetry,
 	}
 

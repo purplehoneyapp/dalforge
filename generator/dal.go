@@ -272,7 +272,7 @@ type ListConfig struct {
 	Name        string            `yaml:"name"`
 	Where       string            `yaml:"where"`
 	Order       string            `yaml:"order"`
-	Descending  bool              `yaml:"desc"`
+	Descending  bool              `yaml:"descending"`
 	TypeMapping map[string]string `yaml:"typeMapping"`
 }
 

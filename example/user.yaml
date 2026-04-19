@@ -47,13 +47,13 @@ operations:
     - name: list_by_bday
       where: birthdate < :birthdate    # you can use named parameters. This will create a ListByBDay(ctx, birthdate time.Time, startId int64, pageSize int) function
       order: birthdate
-      desc: true
+      descending: true
     - name: list_by_age
       where: age = :minAge OR age > :minAge
       order: created
       typeMapping:
         minAge: age
-     # desc: true   # default is false
+     # descending: true   # default is false
     - name: list_by_status
       where: status = :status
       order: created

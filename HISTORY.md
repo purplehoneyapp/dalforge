@@ -1,5 +1,8 @@
 # Version History
 
+## v1.5.4 - 2026-04-18
+  - change: desc -> descending renamed. Dropped desc
+
 ## v1.5.3 - 2026-04-15
   - new: epoch list invalidation for caching
 
